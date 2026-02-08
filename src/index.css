@@ -1,0 +1,9 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    /* No v4, o @apply funciona automaticamente se @import "tailwindcss" estiver no topo */
+    @apply bg-slate-900 text-slate-100 antialiased;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
