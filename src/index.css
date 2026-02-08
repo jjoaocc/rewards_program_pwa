@@ -1,9 +1,226 @@
 @import "tailwindcss";
 
 @layer base {
+  :root {
+    /* Sistema de Cores Personalizado */
+    --color-primary: 59 130 246; /* blue-500 */
+    --color-primary-dark: 37 99 235; /* blue-600 */
+    --color-accent: 34 211 238; /* cyan-400 */
+    --color-success: 52 211 153; /* emerald-400 */
+    --color-danger: 248 113 113; /* rose-400 */
+    --color-warning: 251 191 36; /* amber-400 */
+    
+    /* Backgrounds */
+    --bg-primary: 15 23 42; /* slate-900 */
+    --bg-secondary: 30 41 59; /* slate-800 */
+    --bg-tertiary: 51 65 85; /* slate-700 */
+    
+    /* Text */
+    --text-primary: 241 245 249; /* slate-100 */
+    --text-secondary: 148 163 184; /* slate-400 */
+    --text-tertiary: 100 116 139; /* slate-500 */
+    
+    /* Durations */
+    --duration-fast: 150ms;
+    --duration-normal: 250ms;
+    --duration-slow: 350ms;
+    
+    /* Easing */
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
   body {
-    /* No v4, o @apply funciona automaticamente se @import "tailwindcss" estiver no topo */
     @apply bg-slate-900 text-slate-100 antialiased;
     padding-bottom: env(safe-area-inset-bottom);
   }
+
+  /* Scrollbar personalizada (Webkit - Chrome, Safari, Edge) */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background-color: rgb(30 41 59); /* slate-800 */
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: rgb(71 85 105); /* slate-600 */
+    border-radius: 9999px;
+    transition: background-color var(--duration-fast);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(100 116 139); /* slate-500 */
+  }
+
+  /* Desabilita highlight azul em mobile */
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* Animações Globais */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulseSlow {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+/* Classes de Animação Customizadas */
+.animate-fade-in {
+  animation: fadeIn var(--duration-normal) var(--ease-out);
+}
+
+.animate-slide-up {
+  animation: slideUp var(--duration-slow) var(--ease-out);
+}
+
+.animate-slide-down {
+  animation: slideDown var(--duration-slow) var(--ease-out);
+}
+
+.animate-scale-in {
+  animation: scaleIn var(--duration-normal) var(--ease-spring);
+}
+
+.animate-pulse-slow {
+  animation: pulseSlow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Skeleton Loading */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgb(51 65 85) 0%,
+    rgb(71 85 105) 50%,
+    rgb(51 65 85) 100%
+  );
+  background-size: 1000px 100%;
+  animation: shimmer 2s infinite linear;
+  border-radius: 0.5rem;
+}
+
+/* Transições suaves */
+.transition-smooth {
+  transition: all var(--duration-normal) var(--ease-out);
+}
+
+.transition-spring {
+  transition: all var(--duration-slow) var(--ease-spring);
+}
+
+/* Efeito de elevação (hover) */
+.hover-lift {
+  transition: transform var(--duration-normal) var(--ease-out),
+              box-shadow var(--duration-normal) var(--ease-out);
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.3), 0 4px 6px -4px rgb(0 0 0 / 0.2);
+}
+
+.hover-lift:active {
+  transform: translateY(0);
+}
+
+/* Gradientes */
+.gradient-primary {
+  background: linear-gradient(135deg, rgb(59 130 246) 0%, rgb(37 99 235) 100%);
+}
+
+.gradient-success {
+  background: linear-gradient(135deg, rgb(52 211 153) 0%, rgb(16 185 129) 100%);
+}
+
+.gradient-danger {
+  background: linear-gradient(135deg, rgb(248 113 113) 0%, rgb(239 68 68) 100%);
+}
+
+/* Glass effect */
+.glass {
+  background: rgba(30, 41, 59, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Touch feedback */
+.touch-feedback {
+  position: relative;
+  overflow: hidden;
+}
+
+.touch-feedback::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  transform: translate(-50%, -50%);
+  transition: width var(--duration-fast), height var(--duration-fast);
+}
+
+.touch-feedback:active::after {
+  width: 300px;
+  height: 300px;
 }
