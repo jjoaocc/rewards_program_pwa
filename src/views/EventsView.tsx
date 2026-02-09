@@ -109,7 +109,7 @@ export function EventsView() {
           </div>
 
           {/* Indicadores */}
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+          <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex gap-2">
             {MOCK_CAMPAIGNS.map((_, index) => (
               <button
                 key={index}

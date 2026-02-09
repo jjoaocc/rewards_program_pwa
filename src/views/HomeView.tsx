@@ -1,30 +1,62 @@
+// src/views/HomeView.tsx (ATUALIZADO)
+
 import { useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { BalanceCard } from '../components/BalanceCard';
 import { TransactionList } from '../components/TransactionList';
 import { TransactionDetailModal } from '../components/TransactionDetailModal';
-import type { Customer, Transaction } from '../types';
+import { NotificationBell } from '../components/NotificationBell'; // NOVO
+import { NotificationModal } from '../components/NotificationModal'; // NOVO
+import { MOCK_NOTIFICATIONS } from '../data/mockNotifications'; // NOVO
+import type { Customer, Transaction, Notification } from '../types';
 
 interface HomeViewProps {
   customer: Customer;
   transactions: Transaction[];
-  onNavigateToExtrato: () => void; // NOVO: função para navegar
+  onNavigateToExtrato: () => void;
 }
 
 export function HomeView({ customer, transactions, onNavigateToExtrato }: HomeViewProps) {
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  
+  // NOVO: Estado das notificações
+  const [notifications, setNotifications] = useState<Notification[]>(MOCK_NOTIFICATIONS);
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  // NOVO: Handlers de notificação
+  const handleMarkAsRead = (id: string) => {
+    setNotifications(prev =>
+      prev.map(n => n.id === id ? { ...n, read: true } : n)
+    );
+  };
+
+  const handleMarkAllAsRead = () => {
+    setNotifications(prev =>
+      prev.map(n => ({ ...n, read: true }))
+    );
+  };
+
+  const handleDeleteNotification = (id: string) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  };
 
   return (
     <>
       <header className="mb-8 pt-4">
-        <div className="flex items-start justify-between">
+        <div className="flex items-start justify-between gap-3"> {/* MODIFICADO: added gap-3 */}
           <div className="flex-1">
             <h1 className="text-2xl font-black text-white">Olá, {customer.name.split(' ')[0]}!</h1>
             <p className="text-slate-500 text-sm font-medium">Código: {customer.id}</p>
           </div>
           
+          {/* NOVO: Sino de Notificação */}
+          <NotificationBell 
+            notifications={notifications}
+            onClick={() => setShowNotifications(true)}
+          />
+          
           {/* Logo da Empresa */}
-          <div className="ml-4">
+          <div>
             <img 
               src="/logo.svg" 
               alt="Logo" 
@@ -44,39 +76,39 @@ export function HomeView({ customer, transactions, onNavigateToExtrato }: HomeVi
             A cada compra, você acumula <strong className="text-white">5% de cashback</strong> em créditos. 
             Use seu saldo diretamente nas lojas participantes para pagar suas próximas compras!
           </p>
-          <div className="flex items-center gap-4 text-xs">
-            <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 bg-emerald-400 rounded-full"></div>
-              <span className="text-slate-400">Sem validade</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-              <span className="text-slate-400">Todas as lojas são elegíveis</span>
-            </div>
-          </div>
+          <button 
+            onClick={onNavigateToExtrato}
+            className="flex items-center gap-2 text-blue-400 hover:text-blue-300 text-xs font-bold transition-smooth"
+          >
+            Ver extrato completo
+            <ChevronRight size={14} />
+          </button>
         </div>
 
+        {/* Lista de Transações Recentes */}
         <TransactionList 
           transactions={transactions.slice(0, 5)}
           onTransactionClick={setSelectedTransaction}
+          showSeeAll
+          onSeeAll={onNavigateToExtrato}
         />
-
-        {/* Link "Ver todas" */}
-        {transactions.length > 5 && (
-          <button
-            onClick={onNavigateToExtrato}
-            className="w-full flex items-center justify-center gap-2 text-sm text-blue-400 hover:text-blue-300 font-semibold transition-smooth py-2 animate-fade-in"
-          >
-            Ver todas as transações
-            <ChevronRight size={16} />
-          </button>
-        )}
       </main>
 
+      {/* Modais */}
       <TransactionDetailModal
         transaction={selectedTransaction}
-        isOpen={!!selectedTransaction}
+        isOpen={selectedTransaction !== null}
         onClose={() => setSelectedTransaction(null)}
+      />
+
+      {/* NOVO: Modal de Notificações */}
+      <NotificationModal
+        isOpen={showNotifications}
+        onClose={() => setShowNotifications(false)}
+        notifications={notifications}
+        onMarkAsRead={handleMarkAsRead}
+        onMarkAllAsRead={handleMarkAllAsRead}
+        onDelete={handleDeleteNotification}
       />
     </>
   );

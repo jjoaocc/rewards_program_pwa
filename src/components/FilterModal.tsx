@@ -52,29 +52,30 @@ export function FilterModal({
 
           <div className="space-y-4">
             {/* Filtro de Data */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="flex items-center gap-2 text-xs text-slate-400 mb-2 font-medium">
-                  <Calendar size={14} />
+                <label className="flex items-center gap-1 text-[10px] text-slate-400 mb-1 font-medium">
+                  <Calendar size={11} />
                   Data Inicial
                 </label>
                 <input
                   type="date"
                   value={filters.startDate}
                   onChange={(e) => onFiltersChange({ ...filters, startDate: e.target.value })}
-                  className="w-full bg-slate-700 border border-slate-600 text-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-smooth"
+                  className="w-full h-9 bg-slate-700 border border-slate-600 text-slate-200 rounded-lg px-0 text-[11px] text-center focus:outline-none focus:ring-2 focus:ring-blue-500 transition-smooth"
                 />
               </div>
+
               <div>
-                <label className="flex items-center gap-2 text-xs text-slate-400 mb-2 font-medium">
-                  <Calendar size={14} />
+                <label className="flex items-center gap-1 text-[10px] text-slate-400 mb-1 font-medium">
+                  <Calendar size={11} />
                   Data Final
                 </label>
                 <input
                   type="date"
                   value={filters.endDate}
                   onChange={(e) => onFiltersChange({ ...filters, endDate: e.target.value })}
-                  className="w-full bg-slate-700 border border-slate-600 text-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-smooth"
+                  className="w-full h-9 bg-slate-700 border border-slate-600 text-slate-200 rounded-lg px-0 text-[11px] text-center focus:outline-none focus:ring-2 focus:ring-blue-500 transition-smooth"
                 />
               </div>
             </div>

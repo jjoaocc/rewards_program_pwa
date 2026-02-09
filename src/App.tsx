@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { Home, Receipt, Calendar, UserCircle } from 'lucide-react';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { LoginView } from './views/LoginView';
 import { HomeView } from './views/HomeView';
 import { HistoryView } from './views/HistoryView';
-import { EventsView } from './views/EventsView'; // NOVO
+import { EventsView } from './views/EventsView';
 import { ProfileView } from './views/ProfileView';
 import { HelpCenterView } from './views/HelpCenterView';
 import { TermsView } from './views/TermsView';
@@ -10,7 +12,8 @@ import { PrivacyView } from './views/PrivacyView';
 import { MOCK_CUSTOMER, MOCK_TRANSACTIONS } from './data/mockCustomer';
 import type { ActivePage } from './types';
 
-function App() {
+function AppContent() {
+  const { isAuthenticated, isLoading } = useAuth();
   const [activePage, setActivePage] = useState<ActivePage>('inicio');
 
   const renderView = () => {
@@ -25,7 +28,7 @@ function App() {
         );
       case 'extrato': 
         return <HistoryView transactions={MOCK_TRANSACTIONS} />;
-      case 'eventos': // NOVO
+      case 'eventos':
         return <EventsView />;
       case 'perfil': 
         return <ProfileView customer={MOCK_CUSTOMER} onNavigate={setActivePage} />;
@@ -46,7 +49,21 @@ function App() {
     }
   };
 
-  // Esconde bottom nav nas páginas de ajuda/legal
+  // Loading inicial
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-900">
+        <div className="w-12 h-12 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  // Mostrar login se não autenticado
+  if (!isAuthenticated) {
+    return <LoginView />;
+  }
+
+  // App autenticado
   const showBottomNav = !['ajuda', 'termos', 'privacidade'].includes(activePage);
 
   return (
@@ -87,7 +104,6 @@ function App() {
             )}
           </button>
 
-          {/* NOVO - Botão Eventos */}
           <button
             onClick={() => setActivePage('eventos')}
             className={`flex flex-col items-center gap-1 touch-feedback transition-spring px-3 py-2 rounded-xl ${
@@ -120,6 +136,14 @@ function App() {
         </nav>
       )}
     </div>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 

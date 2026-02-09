@@ -12,6 +12,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import type { Customer, ActivePage } from '../types';
+import { useAuth } from '../contexts/AuthContext';
 
 interface ProfileViewProps {
   customer: Customer;
@@ -21,6 +22,7 @@ interface ProfileViewProps {
 export function ProfileView({ customer, onNavigate }: ProfileViewProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedCustomer, setEditedCustomer] = useState(customer);
+  const { logout } = useAuth(); 
 
   const handleSave = () => {
     // Aqui entraria a lógica de salvar no backend
@@ -482,7 +484,7 @@ export function ProfileView({ customer, onNavigate }: ProfileViewProps) {
       </div>
 
       {/* Botão Sair (no final) */}
-      <button className="w-full mt-6 py-3 px-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 font-semibold text-sm hover:bg-rose-500/20 transition-smooth">
+      <button onClick={logout} className="w-full mt-6 py-3 px-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 font-semibold text-sm hover:bg-rose-500/20 transition-smooth">
         Sair da Conta
       </button>
     </main>

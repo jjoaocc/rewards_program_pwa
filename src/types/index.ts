@@ -86,6 +86,28 @@ export interface Promotion {
   imageUrl?: string;
 }
 
+export interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  type: 'promotion' | 'reward' | 'system'; // Tipos de notificação
+  timestamp: string; // ISO 8601
+  read: boolean;
+  imageUrl?: string; // Opcional: imagem da promoção
+  actionUrl?: string; // Opcional: link para ação
+}
+
+export interface AuthUser {
+  id: string;
+  name: string;
+  email: string;
+}
+
+export interface LoginCredentials {
+  identifier: string; // E-mail ou código
+  password: string;
+}
+
 export type OperationType = 'all' | 'credit' | 'debit';
 
 export interface TransactionFilters {
