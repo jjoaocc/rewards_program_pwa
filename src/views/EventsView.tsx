@@ -1,25 +1,47 @@
-import { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Calendar, Tag, Sparkles } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Calendar, Tag } from 'lucide-react';
 import { MOCK_CAMPAIGNS, MOCK_PROMOTIONS } from '../data/mockEvents';
+import { PromotionDetailModal } from '../components/PromotionDetailModal';
+import type { Promotion } from '../types';
 
 export function EventsView() {
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [selectedPromotion, setSelectedPromotion] = useState<Promotion | null>(null);
+  const carouselRef = useRef<HTMLDivElement>(null);
+  const touchStartX = useRef(0);
+  const touchEndX = useRef(0);
 
-  // Auto-play do carrossel (troca a cada 5 segundos)
+  // Auto-play do carrossel (troca a cada 10 segundos)
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % MOCK_CAMPAIGNS.length);
-    }, 5000);
+    }, 10000);
 
     return () => clearInterval(interval);
   }, []);
 
-  const nextSlide = () => {
-    setCurrentSlide((prev) => (prev + 1) % MOCK_CAMPAIGNS.length);
+  // Handlers de touch para swipe
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
   };
 
-  const prevSlide = () => {
-    setCurrentSlide((prev) => (prev - 1 + MOCK_CAMPAIGNS.length) % MOCK_CAMPAIGNS.length);
+  const handleTouchMove = (e: React.TouchEvent) => {
+    touchEndX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = () => {
+    const diff = touchStartX.current - touchEndX.current;
+    const threshold = 50; // Mínimo de pixels para considerar swipe
+
+    if (Math.abs(diff) > threshold) {
+      if (diff > 0) {
+        // Swipe para esquerda (próximo slide)
+        setCurrentSlide((prev) => (prev + 1) % MOCK_CAMPAIGNS.length);
+      } else {
+        // Swipe para direita (slide anterior)
+        setCurrentSlide((prev) => (prev - 1 + MOCK_CAMPAIGNS.length) % MOCK_CAMPAIGNS.length);
+      }
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -35,13 +57,19 @@ export function EventsView() {
     <main className="pt-4 pb-8">
       {/* Header */}
       <div className="flex items-center gap-2 mb-6">
-        <Sparkles size={24} className="text-yellow-400" />
+        <Calendar size={24} className="text-blue-400" />
         <h2 className="text-xl font-bold text-white animate-fade-in">Eventos e Promoções</h2>
-      </div>
+       </div>
 
       {/* Carrossel de Campanhas */}
       <div className="relative mb-8 animate-slide-up">
-        <div className="relative overflow-hidden rounded-3xl bg-slate-800 border border-slate-700 h-64">
+        <div 
+          ref={carouselRef}
+          className="relative overflow-hidden rounded-3xl bg-slate-800 border border-slate-700 h-64 cursor-grab active:cursor-grabbing"
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        >
           {/* Slide atual */}
           <div 
             className="absolute inset-0 transition-opacity duration-500"
@@ -80,20 +108,6 @@ export function EventsView() {
             </div>
           </div>
 
-          {/* Botões de navegação */}
-          <button
-            onClick={prevSlide}
-            className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-black/40 hover:bg-black/60 backdrop-blur-sm rounded-full flex items-center justify-center text-white transition-smooth"
-          >
-            <ChevronLeft size={20} />
-          </button>
-          <button
-            onClick={nextSlide}
-            className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-black/40 hover:bg-black/60 backdrop-blur-sm rounded-full flex items-center justify-center text-white transition-smooth"
-          >
-            <ChevronRight size={20} />
-          </button>
-
           {/* Indicadores */}
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
             {MOCK_CAMPAIGNS.map((_, index) => (
@@ -109,6 +123,11 @@ export function EventsView() {
             ))}
           </div>
         </div>
+
+        {/* Dica de swipe (aparece só na primeira vez) */}
+        <p className="text-center text-xs text-slate-500 mt-2">
+          Deslize para ver mais campanhas
+        </p>
       </div>
 
       {/* Promoções Atuais */}
@@ -159,11 +178,14 @@ export function EventsView() {
                 </div>
               </div>
 
-              {/* Barra de progresso da validade (opcional) */}
+              {/* Barra de ação */}
               <div className="mt-3 pt-3 border-t border-slate-700">
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-slate-500">Disponível em todas as lojas</span>
-                  <button className="text-blue-400 hover:text-blue-300 font-semibold transition-smooth">
+                  <button 
+                    onClick={() => setSelectedPromotion(promo)}
+                    className="text-blue-400 hover:text-blue-300 font-semibold transition-smooth"
+                  >
                     Ver detalhes →
                   </button>
                 </div>
@@ -172,6 +194,13 @@ export function EventsView() {
           ))}
         </div>
       </div>
+
+      {/* Modal de Detalhes */}
+      <PromotionDetailModal
+        promotion={selectedPromotion}
+        isOpen={!!selectedPromotion}
+        onClose={() => setSelectedPromotion(null)}
+      />
     </main>
   );
 }

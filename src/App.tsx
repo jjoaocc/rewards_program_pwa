@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Home, Receipt, Sparkles, UserCircle } from 'lucide-react';
+import { Home, Receipt, Calendar, UserCircle } from 'lucide-react';
 import { HomeView } from './views/HomeView';
 import { HistoryView } from './views/HistoryView';
 import { EventsView } from './views/EventsView'; // NOVO
@@ -96,7 +96,7 @@ function App() {
                 : 'text-slate-500 hover:text-slate-300'
             }`}
           >
-            <Sparkles size={22} strokeWidth={activePage === 'eventos' ? 2.5 : 2} />
+            <Calendar size={22} strokeWidth={activePage === 'eventos' ? 2.5 : 2} />
             <span className="text-[9px] font-bold uppercase tracking-tighter">Eventos</span>
             {activePage === 'eventos' && (
               <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-blue-400 rounded-full animate-scale-in"></div>
