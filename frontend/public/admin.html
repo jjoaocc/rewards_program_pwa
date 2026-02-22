@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin — Push Notifications</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 16px;
+      padding: 32px;
+      width: 100%;
+      max-width: 480px;
+    }
+
+    h1 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #f1f5f9;
+      margin-bottom: 6px;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: #64748b;
+      margin-bottom: 28px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+      background: #0f172a;
+      padding: 4px;
+      border-radius: 10px;
+    }
+
+    .tab {
+      flex: 1;
+      padding: 8px;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      background: transparent;
+      color: #64748b;
+    }
+
+    .tab.active {
+      background: #3b82f6;
+      color: #fff;
+    }
+
+    .section { display: none; }
+    .section.active { display: block; }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #94a3b8;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    input, textarea {
+      width: 100%;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 10px 14px;
+      color: #e2e8f0;
+      font-size: 14px;
+      margin-bottom: 16px;
+      outline: none;
+      transition: border-color 0.15s;
+      font-family: inherit;
+    }
+
+    input:focus, textarea:focus {
+      border-color: #3b82f6;
+    }
+
+    textarea { resize: vertical; min-height: 80px; }
+
+    .btn {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s;
+      margin-top: 4px;
+    }
+
+    .btn-primary { background: #3b82f6; color: #fff; }
+    .btn-primary:hover { background: #2563eb; }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-broadcast { background: #f59e0b; color: #0f172a; }
+    .btn-broadcast:hover { background: #d97706; }
+    .btn-broadcast:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .toast {
+      margin-top: 16px;
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      display: none;
+    }
+
+    .toast.success { background: #064e3b; color: #6ee7b7; border: 1px solid #065f46; }
+    .toast.error   { background: #450a0a; color: #fca5a5; border: 1px solid #7f1d1d; }
+
+    /* Tela de login */
+    #login-screen { display: block; }
+    #app-screen   { display: none; }
+
+    .lock-icon {
+      width: 48px;
+      height: 48px;
+      background: #1e3a5f;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+      font-size: 24px;
+    }
+
+    .divider {
+      border: none;
+      border-top: 1px solid #334155;
+      margin: 20px 0;
+    }
+
+    .stat {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      color: #64748b;
+      margin-top: 8px;
+    }
+
+    .stat span:last-child { color: #e2e8f0; font-weight: 600; }
+  </style>
+</head>
+<body>
+
+  <!-- Tela de login -->
+  <div id="login-screen" class="card">
+    <div class="lock-icon">🔐</div>
+    <h1>Painel Admin</h1>
+    <p class="subtitle">Push Notifications — Rewards Program</p>
+
+    <label>Senha de administrador</label>
+    <input type="password" id="secret-input" placeholder="Digite a chave secreta" />
+
+    <button class="btn btn-primary" onclick="doLogin()">Entrar</button>
+    <div id="login-toast" class="toast error">Chave incorreta. Tente novamente.</div>
+  </div>
+
+  <!-- App principal -->
+  <div id="app-screen" class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+      <h1>📡 Push Notifications</h1>
+      <button onclick="doLogout()" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:13px;">Sair</button>
+    </div>
+    <p class="subtitle">Envie notificações para os clientes do programa de fidelidade</p>
+
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('individual')">👤 Individual</button>
+      <button class="tab" onclick="switchTab('broadcast')">📢 Broadcast</button>
+    </div>
+
+    <!-- Aba individual -->
+    <div id="tab-individual" class="section active">
+      <label>ID do Cliente</label>
+      <input type="text" id="customer-id" placeholder="Ex: 7742" />
+
+      <label>Título</label>
+      <input type="text" id="ind-title" placeholder="Ex: 🎉 Promoção especial!" maxlength="80" />
+
+      <label>Mensagem</label>
+      <textarea id="ind-message" placeholder="Ex: Você tem R$ 50,00 em recompensas disponíveis." maxlength="200"></textarea>
+
+      <label>URL ao clicar (opcional)</label>
+      <input type="text" id="ind-url" placeholder="/" value="/" />
+
+      <button class="btn btn-primary" id="btn-send" onclick="sendIndividual()">Enviar Notificação</button>
+      <div id="ind-toast" class="toast"></div>
+    </div>
+
+    <!-- Aba broadcast -->
+    <div id="tab-broadcast" class="section">
+      <div style="background:#451a03;border:1px solid #92400e;border-radius:10px;padding:12px;margin-bottom:20px;font-size:13px;color:#fbbf24;">
+        ⚠️ Broadcast envia para <strong>todos os clientes</strong> com notificações ativas.
+      </div>
+
+      <label>Título</label>
+      <input type="text" id="bc-title" placeholder="Ex: 🏗️ Promoção do fim de semana!" maxlength="80" />
+
+      <label>Mensagem</label>
+      <textarea id="bc-message" placeholder="Ex: Materiais de construção com até 20% de desconto este fim de semana!" maxlength="200"></textarea>
+
+      <label>URL ao clicar (opcional)</label>
+      <input type="text" id="bc-url" placeholder="/" value="/" />
+
+      <button class="btn btn-broadcast" id="btn-broadcast" onclick="sendBroadcast()">📢 Enviar para Todos</button>
+      <div id="bc-toast" class="toast"></div>
+    </div>
+  </div>
+
+<script>
+  const API = 'https://api.rewards.strokes.dev.br/api/v1'
+  let SECRET = ''
+
+  // ── Auth ────────────────────────────────────────────────────────────────
+  function doLogin() {
+    const val = document.getElementById('secret-input').value.trim()
+    if (!val) return
+    SECRET = val
+    // Valida fazendo uma chamada real à API
+    fetch(`${API}/push/vapid-public-key`)
+      .then(r => {
+        // A chave pública é pública — usamos o /send para validar o secret
+        return fetch(`${API}/push/send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': SECRET },
+          body: JSON.stringify({ customer_id: '__test__', title: '', message: '', url: '/' })
+        })
+      })
+      .then(r => {
+        // 403 = secret errado, qualquer outro (mesmo 422) = secret correto
+        if (r.status === 403) throw new Error('forbidden')
+        document.getElementById('login-screen').style.display = 'none'
+        document.getElementById('app-screen').style.display = 'block'
+        localStorage.setItem('push_admin_secret', SECRET)
+      })
+      .catch(e => {
+        if (e.message === 'forbidden') {
+          SECRET = ''
+          document.getElementById('login-toast').style.display = 'block'
+        }
+      })
+  }
+
+  function doLogout() {
+    SECRET = ''
+    localStorage.removeItem('push_admin_secret')
+    document.getElementById('app-screen').style.display = 'none'
+    document.getElementById('login-screen').style.display = 'block'
+    document.getElementById('secret-input').value = ''
+  }
+
+  // Auto-login se tiver secret salvo
+  window.addEventListener('load', () => {
+    const saved = localStorage.getItem('push_admin_secret')
+    if (saved) {
+      document.getElementById('secret-input').value = saved
+      SECRET = saved
+      doLogin()
+    }
+  })
+
+  // Enter no input de senha faz login
+  document.getElementById('secret-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doLogin()
+  })
+
+  // ── Tabs ────────────────────────────────────────────────────────────────
+  function switchTab(tab) {
+    document.querySelectorAll('.tab').forEach((t, i) => {
+      t.classList.toggle('active', (i === 0 && tab === 'individual') || (i === 1 && tab === 'broadcast'))
+    })
+    document.getElementById('tab-individual').classList.toggle('active', tab === 'individual')
+    document.getElementById('tab-broadcast').classList.toggle('active', tab === 'broadcast')
+  }
+
+  // ── Helpers ─────────────────────────────────────────────────────────────
+  function showToast(id, type, msg) {
+    const el = document.getElementById(id)
+    el.className = `toast ${type}`
+    el.textContent = msg
+    el.style.display = 'block'
+    setTimeout(() => el.style.display = 'none', 5000)
+  }
+
+  function setLoading(btnId, loading) {
+    const btn = document.getElementById(btnId)
+    btn.disabled = loading
+    btn.textContent = loading ? 'Enviando...' : btn.dataset.label
+  }
+
+  // ── Envios ───────────────────────────────────────────────────────────────
+  async function sendIndividual() {
+    const customerId = document.getElementById('customer-id').value.trim()
+    const title     = document.getElementById('ind-title').value.trim()
+    const message   = document.getElementById('ind-message').value.trim()
+    const url       = document.getElementById('ind-url').value.trim() || '/'
+
+    if (!customerId || !title || !message) {
+      showToast('ind-toast', 'error', 'Preencha ID do cliente, título e mensagem.')
+      return
+    }
+
+    const btn = document.getElementById('btn-send')
+    btn.disabled = true
+    btn.textContent = 'Enviando...'
+
+    try {
+      const r = await fetch(`${API}/push/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': SECRET },
+        body: JSON.stringify({ customer_id: customerId, title, message, url })
+      })
+      const data = await r.json()
+
+      if (!r.ok) throw new Error(data.detail || 'Erro desconhecido')
+
+      const { sent, failed, removed } = data
+      showToast('ind-toast', 'success',
+        `✅ Enviado! ${sent} dispositivo(s) recebeu • ${failed} falha(s) • ${removed} removido(s)`
+      )
+    } catch (e) {
+      showToast('ind-toast', 'error', `❌ Erro: ${e.message}`)
+    } finally {
+      btn.disabled = false
+      btn.textContent = 'Enviar Notificação'
+    }
+  }
+
+  async function sendBroadcast() {
+    const title   = document.getElementById('bc-title').value.trim()
+    const message = document.getElementById('bc-message').value.trim()
+    const url     = document.getElementById('bc-url').value.trim() || '/'
+
+    if (!title || !message) {
+      showToast('bc-toast', 'error', 'Preencha título e mensagem.')
+      return
+    }
+
+    if (!confirm(`Enviar para TODOS os clientes?\n\nTítulo: ${title}\nMensagem: ${message}`)) return
+
+    const btn = document.getElementById('btn-broadcast')
+    btn.disabled = true
+    btn.textContent = 'Enviando...'
+
+    try {
+      const r = await fetch(`${API}/push/broadcast`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': SECRET },
+        body: JSON.stringify({ title, message, url })
+      })
+      const data = await r.json()
+
+      if (!r.ok) throw new Error(data.detail || 'Erro desconhecido')
+
+      const { customers_targeted, sent, failed, removed } = data
+      showToast('bc-toast', 'success',
+        `✅ Broadcast concluído! ${customers_targeted} clientes • ${sent} enviados • ${failed} falhas • ${removed} removidos`
+      )
+    } catch (e) {
+      showToast('bc-toast', 'error', `❌ Erro: ${e.message}`)
+    } finally {
+      btn.disabled = false
+      btn.textContent = '📢 Enviar para Todos'
+    }
+  }
+</script>
+</body>
+</html>

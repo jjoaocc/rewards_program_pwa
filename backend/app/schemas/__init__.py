@@ -25,6 +25,12 @@ from app.schemas.event import (
     EventResponse,
     EventFilters
 )
+from app.schemas.push import (
+    PushSubscribeRequest,
+    PushSendRequest,
+    PushBroadcastRequest,
+    PushPublicKeyResponse,
+)
 from app.schemas.auth import Token, TokenData
 
 __all__ = [
@@ -43,5 +49,9 @@ __all__ = [
     "EventResponse",
     "EventFilters",
     "Token",
-    "TokenData"
+    "TokenData",
+    "PushSubscribeRequest",
+    "PushSendRequest",
+    "PushBroadcastRequest",
+    "PushPublicKeyResponse"
 ]

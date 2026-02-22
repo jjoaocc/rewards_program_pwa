@@ -99,17 +99,6 @@ export function LoginView() {
             )}
           </button>
         </form>
-
-        <div className="mt-6 p-4 bg-slate-800/50 border border-slate-700/50 rounded-xl animate-fade-in" style={{ animationDelay: '200ms' }}>
-          <p className="text-xs text-slate-400 text-center mb-2">
-            <span className="font-bold text-slate-300">💡 Dados para teste:</span>
-          </p>
-          <div className="space-y-1 text-xs text-slate-500 text-center">
-            <p>E-mail: <code className="text-blue-400 font-mono">joao.silva@email.com</code></p>
-            <p>Código: <code className="text-blue-400 font-mono">7742</code></p>
-            <p>Senha: <code className="text-blue-400 font-mono">tmx</code></p>
-          </div>
-        </div>
       </div>
     </div>
   );

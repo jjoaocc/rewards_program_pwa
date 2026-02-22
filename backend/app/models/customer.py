@@ -24,3 +24,4 @@ class Customer(Base):
     transactions = relationship("Transaction", back_populates="customer", cascade="all, delete-orphan")
     notifications = relationship("Notification", back_populates="customer", cascade="all, delete-orphan")
     redemptions = relationship("Redemption", back_populates="customer", cascade="all, delete-orphan")
+    push_subscriptions = relationship("PushSubscription", back_populates="customer", cascade="all, delete-orphan")  # ← NOVO

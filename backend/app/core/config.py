@@ -16,6 +16,12 @@ class Settings(BaseSettings):
     
     # CORS
     CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:3000"]
+
+    # Push Notifications (VAPID)
+    VAPID_PRIVATE_KEY: str = ""
+    VAPID_PUBLIC_KEY: str = ""
+    VAPID_ADMIN_EMAIL: str = "admin@rewards.strokes.dev.br"
+    PUSH_ADMIN_SECRET: str = ""
     
     class Config:
         env_file = ".env"

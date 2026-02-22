@@ -17,5 +17,8 @@ pydantic==2.12.5
 pydantic-settings==2.7.1
 email-validator==2.2.0
 
+# Push Notifications
+pywebpush==2.0.0
+
 # Utils
 python-dotenv==1.0.1
