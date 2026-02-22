@@ -1,6 +1,7 @@
 // src/contexts/AuthContext.tsx
 
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import type { ReactNode } from 'react';
 import { apiClient, getStoredToken, setStoredToken, removeStoredToken, ApiError } from '../lib/api-client';
 import type { AuthUser } from '../types';
 

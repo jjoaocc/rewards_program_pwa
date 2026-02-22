@@ -22,11 +22,10 @@ export function removeStoredToken(): void {
 // ─── Tipos de erro ───────────────────────────────────────────────────────────
 
 export class ApiError extends Error {
-  constructor(
-    public readonly status: number,
-    message: string,
-  ) {
+  public readonly status: number;
+  constructor(status: number, message: string) {
     super(message);
+    this.status = status;
     this.name = 'ApiError';
   }
 }

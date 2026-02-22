@@ -87,7 +87,7 @@ function AppContent() {
   };
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-slate-900 p-6 pb-32">
+    <div className="max-w-md mx-auto min-h-screen bg-slate-900 p-6 pb-40">
       <div key={activePage} className="animate-fade-in">
         {renderView()}
       </div>

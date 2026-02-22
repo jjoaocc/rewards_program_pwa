@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { X, Bell, Trash2 } from 'lucide-react';
 import type { Notification } from '../types';
 

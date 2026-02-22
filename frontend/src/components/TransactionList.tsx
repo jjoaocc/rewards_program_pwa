@@ -3,6 +3,8 @@ import type { Transaction } from '../types';
 interface TransactionListProps {
   transactions: Transaction[];
   onTransactionClick?: (transaction: Transaction) => void;
+  showSeeAll?: boolean;   // adiciona
+  onSeeAll?: () => void;  // adiciona
 }
 
 export function TransactionList({ transactions, onTransactionClick }: TransactionListProps) {

@@ -6,6 +6,7 @@ import { apiClient, ApiError } from '../lib/api-client';
 interface Stats {
   totalEarned: number;
   totalRedeemed: number;
+  totalSaved: number;  // adiciona este campo
   transactionCount: number;
   memberSince: string;
 }
@@ -34,6 +35,7 @@ export function useStats(): UseStatsReturn {
       setStats({
         totalEarned: parseFloat(data.total_earned),
         totalRedeemed: parseFloat(data.total_redeemed),
+        totalSaved: parseFloat(data.total_earned), // mesmo valor que totalEarned
         transactionCount: data.transaction_count,
         memberSince: data.member_since,
       });

@@ -1,5 +1,5 @@
 import { Calendar, Store, DollarSign, X } from 'lucide-react';
-import type { TransactionFilters, OperationType, Transaction } from '../types';
+import type { TransactionFilters } from '../types';
 
 interface FilterModalProps {
   isOpen: boolean;
