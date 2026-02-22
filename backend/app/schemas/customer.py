@@ -1,14 +1,29 @@
+# backend/app/schemas/customer.py
+
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 from datetime import date, datetime
 from decimal import Decimal
 
-# Schema para Login
+
 class CustomerLogin(BaseModel):
-    identifier: str  # Email ou código
+    identifier: str
     password: str
 
-# Schema de resposta do cliente (sem senha)
+
+class AddressResponse(BaseModel):
+    cep: str
+    street: str
+    number: str
+    complement: Optional[str] = None
+    neighborhood: str
+    city: str
+    state: str
+
+    class Config:
+        from_attributes = True
+
+
 class CustomerResponse(BaseModel):
     id: str
     name: str
@@ -21,18 +36,19 @@ class CustomerResponse(BaseModel):
     balance: Decimal
     is_active: bool
     created_at: datetime
-    
+    address: Optional[AddressResponse] = None  # NOVO
+
     class Config:
         from_attributes = True
 
-# Schema para atualizar dados do cliente
+
 class CustomerUpdate(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
     mobile: Optional[str] = None
     birth_date: Optional[date] = None
 
-# Schema de estatísticas do cliente
+
 class CustomerStats(BaseModel):
     total_earned: Decimal
     total_redeemed: Decimal

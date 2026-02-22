@@ -2,7 +2,8 @@ from app.schemas.customer import (
     CustomerLogin,
     CustomerResponse,
     CustomerUpdate,
-    CustomerStats
+    CustomerStats,
+    AddressResponse
 )
 from app.schemas.transaction import (
     TransactionResponse,
