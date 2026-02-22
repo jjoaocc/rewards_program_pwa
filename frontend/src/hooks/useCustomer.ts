@@ -1,23 +1,17 @@
-// src/hooks/useCustomer.ts
-
 import { useState, useEffect, useCallback } from 'react';
 import { apiClient, ApiError } from '../lib/api-client';
 import type { Customer } from '../types';
 
-// Formato que o backend retorna em GET /customers/me
 interface CustomerApiResponse {
   id: string;
   name: string;
   email: string;
   phone: string;
-  secondary_email?: string;
-  secondary_phone?: string;
+  mobile?: string;
   document: string;
   document_type: 'cpf' | 'cnpj';
   birth_date?: string;
-  company_founded_date?: string;
   balance: string;
-  identification_token: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -30,29 +24,19 @@ interface CustomerApiResponse {
     city: string;
     state: string;
   };
-  stats?: {
-    total_earned: number;
-    total_redeemed: number;
-    total_saved: number;
-    member_since: string;
-  };
 }
 
-// Converte snake_case do backend para camelCase do frontend
 function mapCustomer(data: CustomerApiResponse): Customer {
   return {
     id: data.id,
     name: data.name,
     email: data.email,
     phone: data.phone,
-    secondaryEmail: data.secondary_email,
-    secondaryPhone: data.secondary_phone,
+    secondaryPhone: data.mobile,
     document: data.document,
     documentType: data.document_type,
     birthDate: data.birth_date,
-    companyFoundedDate: data.company_founded_date,
-    balance: parseFloat(data.balance), 
-    identificationToken: data.id,
+    balance: parseFloat(data.balance),
     active: data.is_active,
     lastUpdated: data.updated_at,
     address: data.address ?? {
@@ -63,19 +47,11 @@ function mapCustomer(data: CustomerApiResponse): Customer {
       city: '',
       state: '',
     },
-    stats: data.stats
-      ? {
-          totalEarned: data.stats.total_earned,
-          totalRedeemed: data.stats.total_redeemed,
-          totalSaved: data.stats.total_saved,
-          memberSince: data.stats.member_since,
-        }
-      : {
-          totalEarned: 0,
-          totalRedeemed: 0,
-          totalSaved: 0,
-          memberSince: data.created_at,
-        },
+    stats: {
+      totalEarned: 0,
+      totalRedeemed: 0,
+      memberSince: data.created_at,
+    },
   };
 }
 
@@ -94,15 +70,11 @@ export function useCustomer(): UseCustomerReturn {
   const fetchCustomer = useCallback(async () => {
     setIsLoading(true);
     setError(null);
-
     try {
       const data = await apiClient.get<CustomerApiResponse>('/customers/me');
       setCustomer(mapCustomer(data));
     } catch (err) {
-      const message =
-        err instanceof ApiError
-          ? err.message
-          : 'Erro ao carregar dados do perfil.';
+      const message = err instanceof ApiError ? err.message : 'Erro ao carregar dados do perfil.';
       setError(message);
       console.error('[useCustomer]', err);
     } finally {

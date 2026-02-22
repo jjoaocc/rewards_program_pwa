@@ -5,20 +5,20 @@ export interface Customer {
   id: string;
   name: string;
   documentType: 'cpf' | 'cnpj';
-  document: string; // CPF ou CNPJ (não editável)
-  
+  document: string;
+
   // Contatos principais
   email: string;
   phone: string;
-  
-  // Contatos secundários (opcionais)
+
+  // Contatos secundários (opcionais — não persistidos no backend atual)
   secondaryEmail?: string;
   secondaryPhone?: string;
-  
+
   // Datas
-  birthDate?: string; // Para CPF (formato ISO)
-  companyFoundedDate?: string; // Para CNPJ (formato ISO)
-  
+  birthDate?: string;         // Para CPF (ISO)
+  companyFoundedDate?: string; // Para CNPJ (ISO)
+
   // Endereço
   address: {
     cep: string;
@@ -27,21 +27,19 @@ export interface Customer {
     complement?: string;
     neighborhood: string;
     city: string;
-    state: string; // UF
+    state: string;
   };
-  
+
   // Programa de fidelidade
   balance: number;
-  identificationToken: string;
   lastUpdated: string;
   active: boolean;
-  
-  // Estatísticas (novo)
+
+  // Estatísticas
   stats: {
-    totalEarned: number;      // Total acumulado desde sempre
-    totalRedeemed: number;    // Total já resgatado
-    totalSaved: number;       // Economia gerada
-    memberSince: string;      // Data de cadastro (ISO)
+    totalEarned: number;   // Total acumulado desde sempre
+    totalRedeemed: number; // Total já resgatado
+    memberSince: string;   // Data de cadastro (ISO)
   };
 }
 
@@ -72,15 +70,15 @@ export interface Campaign {
   imageUrl: string;
   startDate: string;
   endDate: string;
-  highlightColor: string; // hex color
+  highlightColor: string;
 }
 
 export interface Promotion {
   id: string;
   title: string;
   description: string;
-  discount: number; // Porcentagem de desconto
-  category: string; // Ex: "Tintas", "Cimento", "Ferramentas"
+  discount: number;
+  category: string;
   validUntil: string;
   terms?: string;
   imageUrl?: string;
@@ -90,11 +88,11 @@ export interface Notification {
   id: string;
   title: string;
   message: string;
-  type: 'promotion' | 'reward' | 'system'; // Tipos de notificação
-  timestamp: string; // ISO 8601
+  type: 'promotion' | 'reward' | 'system';
+  timestamp: string;
   read: boolean;
-  imageUrl?: string; // Opcional: imagem da promoção
-  actionUrl?: string; // Opcional: link para ação
+  imageUrl?: string;
+  actionUrl?: string;
 }
 
 export interface AuthUser {
@@ -104,7 +102,7 @@ export interface AuthUser {
 }
 
 export interface LoginCredentials {
-  identifier: string; // E-mail ou código
+  identifier: string;
   password: string;
 }
 
