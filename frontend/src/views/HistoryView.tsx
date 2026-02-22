@@ -1,8 +1,10 @@
+// src/views/HistoryView.tsx
+
 import { useState, useMemo } from 'react';
 import { Filter } from 'lucide-react';
 import { TransactionList } from '../components/TransactionList';
 import { FilterModal } from '../components/FilterModal';
-import { TransactionDetailModal } from '../components/TransactionDetailModal'; // NOVO
+import { TransactionDetailModal } from '../components/TransactionDetailModal';
 import type { Transaction, TransactionFilters } from '../types';
 
 const initialFilters: TransactionFilters = {
@@ -17,67 +19,32 @@ const initialFilters: TransactionFilters = {
 export function HistoryView({ transactions }: { transactions: Transaction[] }) {
   const [filters, setFilters] = useState<TransactionFilters>(initialFilters);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
 
-  // Extrair lojas únicas das transações (apenas lojas de compra, não resgates)
   const availableStores = useMemo(() => {
     const storeSet = new Set<string>();
-    transactions.forEach((transaction) => {
-      // Extrai o nome da loja da descrição (ex: "Compra Loja Centro" -> "Loja Centro")
-      if (transaction.description.toLowerCase().includes('compra')) {
-        const storeName = transaction.description.replace(/^Compra\s+/i, '').trim();
-        if (storeName) {
-          storeSet.add(storeName);
-        }
-      }
+    transactions.forEach((t) => {
+      if (t.paymentMethod) storeSet.add(t.paymentMethod);
     });
     return Array.from(storeSet).sort();
   }, [transactions]);
 
-  // Lógica de filtro composto
   const filteredTransactions = useMemo(() => {
-    return transactions.filter((transaction) => {
-      // Filtro de data inicial
-      if (filters.startDate && transaction.date < filters.startDate) {
-        return false;
-      }
-
-      // Filtro de data final
-      if (filters.endDate && transaction.date > filters.endDate) {
-        return false;
-      }
-
-      // Filtro de loja (busca exata ou contém)
-      if (filters.store && !transaction.description.toLowerCase().includes(filters.store.toLowerCase())) {
-        return false;
-      }
-
-      // Filtro de valor mínimo
-      if (filters.minValue && Math.abs(transaction.pointsEarned) < parseFloat(filters.minValue)) {
-        return false;
-      }
-
-      // Filtro de valor máximo
-      if (filters.maxValue && Math.abs(transaction.pointsEarned) > parseFloat(filters.maxValue)) {
-        return false;
-      }
-
-      // Filtro de tipo de operação
-      if (filters.operationType === 'credit' && transaction.pointsEarned <= 0) {
-        return false;
-      }
-      if (filters.operationType === 'debit' && transaction.pointsEarned >= 0) {
-        return false;
-      }
-
-      return true;
-    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return transactions
+      .filter((t) => {
+        if (filters.startDate && t.date < filters.startDate) return false;
+        if (filters.endDate && t.date > filters.endDate) return false;
+        if (filters.store && t.paymentMethod !== filters.store) return false;
+        if (filters.minValue && Math.abs(t.pointsEarned) < parseFloat(filters.minValue)) return false;
+        if (filters.maxValue && Math.abs(t.pointsEarned) > parseFloat(filters.maxValue)) return false;
+        if (filters.operationType === 'credit' && t.pointsEarned <= 0) return false;
+        if (filters.operationType === 'debit' && t.pointsEarned >= 0) return false;
+        return true;
+      })
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [transactions, filters]);
 
-  const handleClearFilters = () => {
-    setFilters(initialFilters);
-  };
-
-  const hasActiveFilters = 
+  const hasActiveFilters =
     filters.startDate !== '' ||
     filters.endDate !== '' ||
     filters.store !== '' ||
@@ -85,14 +52,12 @@ export function HistoryView({ transactions }: { transactions: Transaction[] }) {
     filters.maxValue !== '' ||
     filters.operationType !== 'all';
 
-  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const handleClearFilters = () => setFilters(initialFilters);
 
   return (
     <main className="pt-4">
-      {/* Header com botão de filtro */}
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl font-bold text-white animate-fade-in">Extrato Completo</h2>
-        
         <button
           onClick={() => setIsFilterModalOpen(true)}
           className="relative flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 px-4 py-2 rounded-xl transition-smooth touch-feedback"
@@ -100,12 +65,11 @@ export function HistoryView({ transactions }: { transactions: Transaction[] }) {
           <Filter size={18} />
           <span className="text-sm font-semibold">Filtrar</span>
           {hasActiveFilters && (
-            <span className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full animate-pulse"></span>
+            <span className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full animate-pulse" />
           )}
         </button>
       </div>
 
-      {/* Indicador de filtros ativos */}
       {hasActiveFilters && (
         <div className="mb-4 flex items-center gap-2 text-xs animate-slide-down">
           <span className="text-slate-400">Filtros ativos:</span>
@@ -115,7 +79,6 @@ export function HistoryView({ transactions }: { transactions: Transaction[] }) {
         </div>
       )}
 
-      {/* Lista de transações ou empty state */}
       {filteredTransactions.length === 0 ? (
         <div className="text-center py-12 animate-fade-in">
           <Filter size={48} className="mx-auto text-slate-600 mb-4" />
@@ -147,7 +110,6 @@ export function HistoryView({ transactions }: { transactions: Transaction[] }) {
         onClose={() => setSelectedTransaction(null)}
       />
 
-      {/* Modal de Filtros */}
       <FilterModal
         isOpen={isFilterModalOpen}
         onClose={() => setIsFilterModalOpen(false)}

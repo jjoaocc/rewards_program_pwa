@@ -1,80 +1,148 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+// src/contexts/AuthContext.tsx
+
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { apiClient, getStoredToken, setStoredToken, removeStoredToken, ApiError } from '../lib/api-client';
 import type { AuthUser } from '../types';
+
+// ─── Tipos ───────────────────────────────────────────────────────────────────
 
 interface AuthContextType {
   user: AuthUser | null;
   isAuthenticated: boolean;
+  isLoading: boolean;
   login: (identifier: string, password: string) => Promise<boolean>;
   logout: () => void;
-  isLoading: boolean;
 }
 
+// Resposta do POST /auth/login
+interface LoginResponse {
+  access_token: string;
+  token_type: string;
+}
+
+// ─── Context ─────────────────────────────────────────────────────────────────
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// ─── Provider ────────────────────────────────────────────────────────────────
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Restaurar sessão do localStorage ao carregar
-  useEffect(() => {
-    const storedUser = localStorage.getItem('authUser');
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch (error) {
-        console.error('Erro ao restaurar sessão:', error);
-        localStorage.removeItem('authUser');
-      }
-    }
-    setIsLoading(false);
+  // Limpa sessão (usada tanto no logout manual quanto no 401 automático)
+  const clearSession = useCallback(() => {
+    setUser(null);
+    removeStoredToken();
   }, []);
+
+  // Busca os dados do usuário autenticado via GET /auth/me
+  const fetchCurrentUser = useCallback(async (): Promise<AuthUser | null> => {
+    try {
+      const data = await apiClient.get<{
+        id: string;
+        name: string;
+        email: string;
+      }>('/auth/me');
+
+      return {
+        id: data.id,
+        name: data.name,
+        email: data.email,
+      };
+    } catch {
+      return null;
+    }
+  }, []);
+
+  // Ao montar: verifica se já existe token salvo e valida no backend
+  useEffect(() => {
+    async function restoreSession() {
+      const token = getStoredToken();
+
+      if (!token) {
+        setIsLoading(false);
+        return;
+      }
+
+      // Token existe → valida no backend
+      const userData = await fetchCurrentUser();
+
+      if (userData) {
+        setUser(userData);
+      } else {
+        // Token inválido ou expirado → limpa tudo
+        removeStoredToken();
+      }
+
+      setIsLoading(false);
+    }
+
+    restoreSession();
+  }, [fetchCurrentUser]);
+
+  // Escuta o evento global disparado pelo api-client quando recebe 401
+  useEffect(() => {
+    const handleUnauthorized = () => clearSession();
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
+  }, [clearSession]);
+
+  // ── Login ──────────────────────────────────────────────────────────────────
 
   const login = async (identifier: string, password: string): Promise<boolean> => {
     setIsLoading(true);
-    
-    await new Promise(resolve => setTimeout(resolve, 300));
 
-    const isValidPassword = password === 'tmx';
-    const isValidIdentifier = 
-      identifier === 'joao.silva@email.com' || 
-      identifier === '7742';
+    try {
+      // 1. Autentica e recebe o JWT
+      const { access_token } = await apiClient.post<LoginResponse>(
+        '/auth/login',
+        { identifier, password },
+        false, // não requer token (é o próprio login)
+      );
 
-    if (isValidPassword && isValidIdentifier) {
-      const mockUser: AuthUser = {
-        id: '7742',
-        name: 'João Silva',
-        email: 'joao.silva@email.com'
-      };
-      
-      setUser(mockUser);
-      localStorage.setItem('authUser', JSON.stringify(mockUser));
+      // 2. Persiste o token
+      setStoredToken(access_token);
+
+      // 3. Busca dados completos do usuário
+      const userData = await fetchCurrentUser();
+
+      if (!userData) {
+        // Token veio mas /me falhou (situação inesperada)
+        removeStoredToken();
+        setIsLoading(false);
+        return false;
+      }
+
+      setUser(userData);
       setIsLoading(false);
       return true;
-    }
 
-    setIsLoading(false);
-    return false;
+    } catch (error) {
+      if (error instanceof ApiError) {
+        console.error(`[Auth] Erro ${error.status}: ${error.message}`);
+      }
+      setIsLoading(false);
+      return false;
+    }
   };
 
+  // ── Logout ─────────────────────────────────────────────────────────────────
+
   const logout = () => {
-    setUser(null);
-    localStorage.removeItem('authUser');
+    clearSession();
+    // POST /auth/logout é opcional (JWT é stateless), mas útil para logs futuros
+    apiClient.post('/auth/logout', {}).catch(() => {});
   };
 
   return (
-    <AuthContext.Provider 
-      value={{ 
-        user, 
-        isAuthenticated: !!user, 
-        login, 
-        logout,
-        isLoading 
-      }}
-    >
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
 }
+
+// ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useAuth() {
   const context = useContext(AuthContext);

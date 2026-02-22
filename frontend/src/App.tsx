@@ -1,6 +1,11 @@
-import { useState } from 'react';
+// src/App.tsx — substitui o arquivo inteiro
+
+import { useState, useMemo } from 'react';
 import { Home, Receipt, Calendar, UserCircle } from 'lucide-react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { useCustomer } from './hooks/useCustomer';
+import { useTransactions } from './hooks/useTransactions';
+import { useStats } from './hooks/useStats';
 import { LoginView } from './views/LoginView';
 import { HomeView } from './views/HomeView';
 import { HistoryView } from './views/HistoryView';
@@ -9,62 +14,77 @@ import { ProfileView } from './views/ProfileView';
 import { HelpCenterView } from './views/HelpCenterView';
 import { TermsView } from './views/TermsView';
 import { PrivacyView } from './views/PrivacyView';
-import { MOCK_CUSTOMER, MOCK_TRANSACTIONS } from './data/mockCustomer';
 import type { ActivePage } from './types';
 
 function AppContent() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const [activePage, setActivePage] = useState<ActivePage>('inicio');
+
+  const { customer, isLoading: isCustomerLoading, refetch: refetchCustomer } = useCustomer();
+  const { transactions, isLoading: isTransactionsLoading } = useTransactions();
+  const { stats } = useStats();
+
+  // Mescla stats da API no objeto customer
+  const customerWithStats = useMemo(() => {
+    if (!customer) return null;
+    return {
+      ...customer,
+      stats: stats ?? customer.stats,
+    };
+  }, [customer, stats]);
+
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-900">
+        <div className="w-12 h-12 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) return <LoginView />;
+
+  if (isCustomerLoading || isTransactionsLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-slate-900">
+        <div className="w-12 h-12 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
+        <p className="text-slate-400 text-sm">Carregando seus dados...</p>
+      </div>
+    );
+  }
+
+  if (!customerWithStats) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-slate-900 p-6">
+        <p className="text-slate-300 text-center">Não foi possível carregar seus dados.<br />Tente novamente.</p>
+        <button onClick={() => window.location.reload()} className="px-6 py-3 bg-blue-500 text-white rounded-xl font-semibold text-sm">
+          Recarregar
+        </button>
+      </div>
+    );
+  }
+
+  const showBottomNav = !['ajuda', 'termos', 'privacidade'].includes(activePage);
 
   const renderView = () => {
     switch (activePage) {
-      case 'inicio': 
-        return (
-          <HomeView 
-            customer={MOCK_CUSTOMER} 
-            transactions={MOCK_TRANSACTIONS}
-            onNavigateToExtrato={() => setActivePage('extrato')}
-          />
-        );
-      case 'extrato': 
-        return <HistoryView transactions={MOCK_TRANSACTIONS} />;
+      case 'inicio':
+        return <HomeView customer={customerWithStats} transactions={transactions} onNavigateToExtrato={() => setActivePage('extrato')} />;
+      case 'extrato':
+        return <HistoryView transactions={transactions} />;
       case 'eventos':
         return <EventsView />;
-      case 'perfil': 
-        return <ProfileView customer={MOCK_CUSTOMER} onNavigate={setActivePage} />;
+      case 'perfil':
+        return <ProfileView customer={customerWithStats} onNavigate={setActivePage} onUpdate={refetchCustomer} />;
       case 'ajuda':
         return <HelpCenterView onBack={() => setActivePage('perfil')} />;
       case 'termos':
         return <TermsView onBack={() => setActivePage('perfil')} />;
       case 'privacidade':
         return <PrivacyView onBack={() => setActivePage('perfil')} />;
-      default: 
-        return (
-          <HomeView 
-            customer={MOCK_CUSTOMER} 
-            transactions={MOCK_TRANSACTIONS}
-            onNavigateToExtrato={() => setActivePage('extrato')}
-          />
-        );
+      default:
+        return <HomeView customer={customerWithStats} transactions={transactions} onNavigateToExtrato={() => setActivePage('extrato')} />;
     }
   };
-
-  // Loading inicial
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-900">
-        <div className="w-12 h-12 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
-  // Mostrar login se não autenticado
-  if (!isAuthenticated) {
-    return <LoginView />;
-  }
-
-  // App autenticado
-  const showBottomNav = !['ajuda', 'termos', 'privacidade'].includes(activePage);
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-slate-900 p-6 pb-32">
@@ -74,65 +94,28 @@ function AppContent() {
 
       {showBottomNav && (
         <nav className="fixed bottom-0 left-0 right-0 glass border-t border-slate-700 px-4 flex justify-around items-center h-20 max-w-md mx-auto pb-[env(safe-area-inset-bottom)]">
-          <button
-            onClick={() => setActivePage('inicio')}
-            className={`flex flex-col items-center gap-1 touch-feedback transition-spring px-3 py-2 rounded-xl ${
-              activePage === 'inicio'
-                ? 'text-blue-400 scale-110'
-                : 'text-slate-500 hover:text-slate-300'
-            }`}
-          >
-            <Home size={22} strokeWidth={activePage === 'inicio' ? 2.5 : 2} />
-            <span className="text-[9px] font-bold uppercase tracking-tighter">Início</span>
-            {activePage === 'inicio' && (
-              <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-blue-400 rounded-full animate-scale-in"></div>
-            )}
-          </button>
-
-          <button
-            onClick={() => setActivePage('extrato')}
-            className={`flex flex-col items-center gap-1 touch-feedback transition-spring px-3 py-2 rounded-xl ${
-              activePage === 'extrato'
-                ? 'text-blue-400 scale-110'
-                : 'text-slate-500 hover:text-slate-300'
-            }`}
-          >
-            <Receipt size={22} strokeWidth={activePage === 'extrato' ? 2.5 : 2} />
-            <span className="text-[9px] font-bold uppercase tracking-tighter">Extrato</span>
-            {activePage === 'extrato' && (
-              <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-blue-400 rounded-full animate-scale-in"></div>
-            )}
-          </button>
-
-          <button
-            onClick={() => setActivePage('eventos')}
-            className={`flex flex-col items-center gap-1 touch-feedback transition-spring px-3 py-2 rounded-xl ${
-              activePage === 'eventos'
-                ? 'text-blue-400 scale-110'
-                : 'text-slate-500 hover:text-slate-300'
-            }`}
-          >
-            <Calendar size={22} strokeWidth={activePage === 'eventos' ? 2.5 : 2} />
-            <span className="text-[9px] font-bold uppercase tracking-tighter">Eventos</span>
-            {activePage === 'eventos' && (
-              <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-blue-400 rounded-full animate-scale-in"></div>
-            )}
-          </button>
-
-          <button
-            onClick={() => setActivePage('perfil')}
-            className={`flex flex-col items-center gap-1 touch-feedback transition-spring px-3 py-2 rounded-xl ${
-              activePage === 'perfil'
-                ? 'text-blue-400 scale-110'
-                : 'text-slate-500 hover:text-slate-300'
-            }`}
-          >
-            <UserCircle size={22} strokeWidth={activePage === 'perfil' ? 2.5 : 2} />
-            <span className="text-[9px] font-bold uppercase tracking-tighter">Perfil</span>
-            {activePage === 'perfil' && (
-              <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-blue-400 rounded-full animate-scale-in"></div>
-            )}
-          </button>
+          {(
+            [
+              { page: 'inicio', icon: Home, label: 'Início' },
+              { page: 'extrato', icon: Receipt, label: 'Extrato' },
+              { page: 'eventos', icon: Calendar, label: 'Eventos' },
+              { page: 'perfil', icon: UserCircle, label: 'Perfil' },
+            ] as const
+          ).map(({ page, icon: Icon, label }) => (
+            <button
+              key={page}
+              onClick={() => setActivePage(page)}
+              className={`relative flex flex-col items-center gap-1 touch-feedback transition-spring px-3 py-2 rounded-xl ${
+                activePage === page ? 'text-blue-400 scale-110' : 'text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              <Icon size={22} strokeWidth={activePage === page ? 2.5 : 2} />
+              <span className="text-[9px] font-bold uppercase tracking-tighter">{label}</span>
+              {activePage === page && (
+                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-blue-400 rounded-full animate-scale-in" />
+              )}
+            </button>
+          ))}
         </nav>
       )}
     </div>

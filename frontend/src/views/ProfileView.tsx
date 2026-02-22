@@ -13,22 +13,40 @@ import {
 } from 'lucide-react';
 import type { Customer, ActivePage } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+import { apiClient, ApiError } from '../lib/api-client';
 
 interface ProfileViewProps {
   customer: Customer;
   onNavigate: (page: ActivePage) => void;
+  onUpdate: () => void;
 }
 
-export function ProfileView({ customer, onNavigate }: ProfileViewProps) {
+export function ProfileView({ customer, onNavigate, onUpdate}: ProfileViewProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedCustomer, setEditedCustomer] = useState(customer);
   const { logout } = useAuth(); 
 
-  const handleSave = () => {
-    // Aqui entraria a lógica de salvar no backend
-    console.log('Salvando dados:', editedCustomer);
-    setIsEditing(false);
-    // TODO: Integrar com API quando houver backend
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      await apiClient.patch('/customers/me', {
+        name: editedCustomer.name,
+        phone: editedCustomer.phone,
+        mobile: editedCustomer.secondaryPhone,
+        birth_date: editedCustomer.birthDate ?? null,
+      });
+      setIsEditing(false);
+      onUpdate();
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Erro ao salvar dados.';
+      setSaveError(message);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleCancel = () => {
@@ -48,9 +66,11 @@ export function ProfileView({ customer, onNavigate }: ProfileViewProps) {
     });
   };
 
-  const memberDays = Math.floor(
-    (new Date().getTime() - new Date(customer.stats.memberSince).getTime()) / (1000 * 60 * 60 * 24)
-  );
+  const memberSinceDate = new Date(customer.stats.memberSince);
+  memberSinceDate.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const memberDays = Math.max(0, Math.floor((today.getTime() - memberSinceDate.getTime()) / (1000 * 60 * 60 * 24)));
 
   return (
     <main className="pt-4 pb-8">
@@ -76,11 +96,17 @@ export function ProfileView({ customer, onNavigate }: ProfileViewProps) {
             </button>
             <button
               onClick={handleSave}
-              className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl transition-smooth font-semibold text-sm"
+              disabled={isSaving}
+              className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white px-4 py-2 rounded-xl transition-smooth font-semibold text-sm"
             >
               <Save size={16} />
-              Salvar
+              {isSaving ? 'Salvando...' : 'Salvar'}
             </button>
+
+            {/* Adiciona abaixo dos botões, se houver erro: */}
+            {saveError && (
+              <p className="text-xs text-rose-400 mt-2 text-right">{saveError}</p>
+            )}
           </div>
         )}
       </div>
