@@ -1,4 +1,5 @@
 import { X, ShoppingBag, CreditCard, FileText, Calendar, Clock, MapPin } from 'lucide-react';
+import { formatCurrency, formatDateLong } from '../lib/format';
 import type { Transaction } from '../types';
 
 interface TransactionDetailModalProps {
@@ -34,11 +35,7 @@ export function TransactionDetailModal({ transaction, isOpen, onClose }: Transac
               <div className="flex items-center gap-3 text-xs text-slate-400">
                 <span className="flex items-center gap-1">
                   <Calendar size={12} />
-                  {new Date(transaction.date).toLocaleDateString('pt-BR', {
-                    day: '2-digit',
-                    month: 'long',
-                    year: 'numeric'
-                  })}
+                  {formatDateLong(transaction.date)}
                 </span>
                 {transaction.time && (
                   <span className="flex items-center gap-1">
@@ -61,7 +58,7 @@ export function TransactionDetailModal({ transaction, isOpen, onClose }: Transac
             <div className="bg-slate-700/50 rounded-xl p-4">
               <p className="text-xs text-slate-400 mb-1">Valor da Compra</p>
               <p className="text-xl font-bold text-white">
-                R$ {transaction.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                R$ {formatCurrency(transaction.value)}
               </p>
             </div>
             <div className={`rounded-xl p-4 ${isCredit ? 'bg-emerald-500/10' : 'bg-rose-500/10'}`}>
@@ -69,7 +66,7 @@ export function TransactionDetailModal({ transaction, isOpen, onClose }: Transac
                 {isCredit ? 'Pontos Ganhos' : 'Pontos Usados'}
               </p>
               <p className={`text-xl font-bold ${isCredit ? 'text-emerald-400' : 'text-rose-400'}`}>
-                {isCredit ? '+' : ''} R$ {Math.abs(transaction.pointsEarned).toFixed(2)}
+                {isCredit ? '+' : ''} R$ {formatCurrency(Math.abs(transaction.pointsEarned))}
               </p>
             </div>
           </div>
@@ -107,16 +104,16 @@ export function TransactionDetailModal({ transaction, isOpen, onClose }: Transac
                     style={{ animationDelay: `${index * 50}ms` }}
                   >
                     <div className="flex justify-between items-start mb-1">
-                      <p className="text-sm font-semibold text-slate-200 flex-1 pr-2">
+                      <p className="text-sm font-semibold text-slate-200 flex-1 min-w-0 pr-2 truncate">
                         {product.name}
                       </p>
-                      <p className="text-sm font-bold text-white whitespace-nowrap">
-                        R$ {product.total.toFixed(2)}
+                      <p className="text-sm font-bold text-white whitespace-nowrap shrink-0">
+                        R$ {formatCurrency(product.total)}
                       </p>
                     </div>
                     <div className="flex justify-between items-center text-xs text-slate-400">
                       <span>
-                        {product.quantity}x R$ {product.unitPrice.toFixed(2)}
+                        {product.quantity}x R$ {formatCurrency(product.unitPrice)}
                       </span>
                     </div>
                   </div>
@@ -129,7 +126,7 @@ export function TransactionDetailModal({ transaction, isOpen, onClose }: Transac
                   {transaction.products.length} {transaction.products.length === 1 ? 'item' : 'itens'}
                 </span>
                 <span className="text-lg font-bold text-white">
-                  R$ {transaction.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  R$ {formatCurrency(transaction.value)}
                 </span>
               </div>
             </div>

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Calendar, Tag } from 'lucide-react';
 import { useEvents } from '../hooks/useEvents';
 import { PromotionDetailModal } from '../components/PromotionDetailModal';
+import { formatDateShort } from '../lib/format';
 import type { Promotion } from '../types';
 
 export function EventsView() {
@@ -41,9 +42,6 @@ export function EventsView() {
       else setCurrentSlide(prev => (prev - 1 + campaigns.length) % campaigns.length);
     }
   };
-
-  const formatDate = (dateString: string) =>
-    new Date(dateString).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
 
   if (isLoading) {
     return (
@@ -100,7 +98,7 @@ export function EventsView() {
                 <div className="flex items-center gap-2 text-xs text-slate-300">
                   <Calendar size={14} />
                   <span>
-                    {formatDate(currentCampaign.startDate)} - {formatDate(currentCampaign.endDate)}
+                    {formatDateShort(currentCampaign.startDate)} - {formatDateShort(currentCampaign.endDate)}
                   </span>
                 </div>
               </div>
@@ -145,7 +143,7 @@ export function EventsView() {
                     <p className="font-semibold text-slate-200 text-sm">{promo.title}</p>
                     <p className="text-xs text-slate-500 mt-1">{promo.description}</p>
                     <p className="text-xs text-slate-600 mt-1">
-                      Válido até {formatDate(promo.validUntil)}
+                      Válido até {formatDateShort(promo.validUntil)}
                     </p>
                   </div>
                   <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-3 py-1.5 shrink-0">

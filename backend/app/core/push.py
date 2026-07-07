@@ -1,13 +1,30 @@
 import json
 import logging
+from typing import Protocol
+
+from pywebpush import WebPushException, webpush
 from sqlalchemy.orm import Session
-from pywebpush import webpush, WebPushException
 
 from app.core.config import settings
 from app.models.push_subscription import PushSubscription
-from app.models.notification import Notification
 
 logger = logging.getLogger(__name__)
+
+
+class WebPushSender(Protocol):
+    """Porta para o envio de um push individual — permite injetar um fake nos testes
+    sem precisar fazer monkeypatch direto na função `webpush` da lib `pywebpush`."""
+
+    def __call__(self, *, subscription_info: dict, data: str, vapid_private_key: str, vapid_claims: dict) -> None: ...
+
+
+def _pywebpush_sender(*, subscription_info: dict, data: str, vapid_private_key: str, vapid_claims: dict) -> None:
+    webpush(
+        subscription_info=subscription_info,
+        data=data,
+        vapid_private_key=vapid_private_key,
+        vapid_claims=vapid_claims,
+    )
 
 
 def _subscription_info(sub: PushSubscription) -> dict:
@@ -17,16 +34,18 @@ def _subscription_info(sub: PushSubscription) -> dict:
     }
 
 
-def _send_one(sub: PushSubscription, title: str, message: str, url: str) -> bool:
-    payload = json.dumps({
-        "title": title,
-        "body": message,
-        "icon": "/pwa-192x192.png",
-        "badge": "/pwa-192x192.png",
-        "data": {"url": url},
-    })
+def _send_one(sub: PushSubscription, title: str, message: str, url: str, sender: WebPushSender) -> bool | None:
+    payload = json.dumps(
+        {
+            "title": title,
+            "body": message,
+            "icon": "/pwa-192x192.png",
+            "badge": "/pwa-192x192.png",
+            "data": {"url": url},
+        }
+    )
     try:
-        webpush(
+        sender(
             subscription_info=_subscription_info(sub),
             data=payload,
             vapid_private_key=settings.VAPID_PRIVATE_KEY,
@@ -40,14 +59,26 @@ def _send_one(sub: PushSubscription, title: str, message: str, url: str) -> bool
         if status_code == 410:
             return None  # sinaliza para remover do banco
         return False
+    except Exception as e:
+        # Falha de rede (timeout, DNS, conexão recusada) não é um WebPushException —
+        # não pode derrubar a requisição inteira; conta como falha e segue para a próxima.
+        logger.warning("Push falhou para sub %s — erro de rede: %s", sub.id, e)
+        return False
 
 
-def send_push_to_customer(customer_id: str, title: str, message: str, url: str, db: Session) -> dict:
-    subs = db.query(PushSubscription).filter(PushSubscription.customer_id == customer_id).all()
-
+def send_push_to_subscriptions(
+    subs: list[PushSubscription],
+    title: str,
+    message: str,
+    url: str,
+    db: Session,
+    sender: WebPushSender = _pywebpush_sender,
+) -> dict:
+    """Envia o mesmo push pra uma lista de subscriptions já carregada (usado tanto
+    pra um único cliente quanto pro broadcast, sem re-consultar o banco por cliente)."""
     sent = failed = removed = 0
     for sub in subs:
-        result = _send_one(sub, title, message, url)
+        result = _send_one(sub, title, message, url, sender)
         if result is True:
             sent += 1
         elif result is None:
@@ -62,15 +93,13 @@ def send_push_to_customer(customer_id: str, title: str, message: str, url: str, 
     return {"sent": sent, "failed": failed, "removed": removed}
 
 
-def notify_customer(notification: Notification, db: Session) -> None:
-    """Chamado automaticamente ao criar uma Notification no banco."""
-    try:
-        send_push_to_customer(
-            customer_id=notification.customer_id,
-            title=notification.title,
-            message=notification.message,
-            url=notification.action_url or "/",
-            db=db,
-        )
-    except Exception as e:
-        logger.error("Erro inesperado no notify_customer: %s", str(e))
+def send_push_to_customer(
+    customer_id: str,
+    title: str,
+    message: str,
+    url: str,
+    db: Session,
+    sender: WebPushSender = _pywebpush_sender,
+) -> dict:
+    subs = db.query(PushSubscription).filter(PushSubscription.customer_id == customer_id).all()
+    return send_push_to_subscriptions(subs, title, message, url, db, sender)

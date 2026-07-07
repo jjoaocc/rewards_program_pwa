@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { apiClient } from '../lib/api-client'
+import { apiClient, type ApiClientPort } from '../lib/api-client'
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
@@ -22,7 +22,7 @@ interface UsePushNotificationsReturn {
   unsubscribe: () => Promise<void>
 }
 
-export function usePushNotifications(): UsePushNotificationsReturn {
+export function usePushNotifications(client: ApiClientPort = apiClient): UsePushNotificationsReturn {
   const [permissionState, setPermissionState] = useState<PermissionState>('default')
   const [isSubscribed, setIsSubscribed] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -51,7 +51,7 @@ export function usePushNotifications(): UsePushNotificationsReturn {
       setPermissionState(permission as PermissionState)
       if (permission !== 'granted') return
 
-      const { public_key } = await apiClient.get<{ public_key: string }>('/push/vapid-public-key')
+      const { public_key } = await client.get<{ public_key: string }>('/push/vapid-public-key')
 
       const reg = await navigator.serviceWorker.ready
       const sub = await reg.pushManager.subscribe({
@@ -60,7 +60,7 @@ export function usePushNotifications(): UsePushNotificationsReturn {
       })
 
       const json = sub.toJSON()
-      await apiClient.post('/push/subscribe', {
+      await client.post('/push/subscribe', {
         endpoint: json.endpoint,
         p256dh: json.keys?.p256dh,
         auth: json.keys?.auth,
@@ -73,7 +73,7 @@ export function usePushNotifications(): UsePushNotificationsReturn {
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [client])
 
   const unsubscribe = useCallback(async () => {
     setIsLoading(true)
@@ -82,14 +82,14 @@ export function usePushNotifications(): UsePushNotificationsReturn {
       const sub = await reg.pushManager.getSubscription()
       if (sub) await sub.unsubscribe()
 
-      await apiClient.delete('/push/unsubscribe')
+      await client.delete('/push/unsubscribe')
       setIsSubscribed(false)
     } catch (err) {
       console.error('[usePushNotifications] Erro ao desativar:', err)
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [client])
 
   return { permissionState, isSubscribed, isLoading, subscribe, unsubscribe }
 }

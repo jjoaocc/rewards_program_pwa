@@ -1,5 +1,3 @@
-// src/components/NotificationBell.tsx (ATUALIZADO)
-
 import { Bell } from 'lucide-react';
 import type { Notification } from '../types';
 

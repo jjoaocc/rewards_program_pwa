@@ -1,21 +1,24 @@
 # backend/app/schemas/customer.py
 
-from pydantic import BaseModel, EmailStr
-from typing import Optional
 from datetime import date, datetime
 from decimal import Decimal
+
+from pydantic import BaseModel, EmailStr, Field
 
 
 class CustomerLogin(BaseModel):
     identifier: str
-    password: str
+    # bcrypt só considera os primeiros 72 bytes; acima disso ele levanta ValueError
+    # em vez de comparar. Rejeitar aqui dá um 422 claro em vez de deixar o erro
+    # estourar lá na frente como 500.
+    password: str = Field(..., max_length=72)
 
 
 class AddressResponse(BaseModel):
     cep: str
     street: str
     number: str
-    complement: Optional[str] = None
+    complement: str | None = None
     neighborhood: str
     city: str
     state: str
@@ -28,25 +31,28 @@ class CustomerResponse(BaseModel):
     id: str
     name: str
     email: EmailStr
+    secondary_email: EmailStr | None = None
     document: str
     document_type: str
-    birth_date: Optional[date] = None
-    phone: Optional[str] = None
-    mobile: Optional[str] = None
+    birth_date: date | None = None
+    phone: str | None = None
+    mobile: str | None = None
     balance: Decimal
     is_active: bool
     created_at: datetime
-    address: Optional[AddressResponse] = None  # NOVO
+    address: AddressResponse | None = None
 
     class Config:
         from_attributes = True
 
 
 class CustomerUpdate(BaseModel):
-    name: Optional[str] = None
-    phone: Optional[str] = None
-    mobile: Optional[str] = None
-    birth_date: Optional[date] = None
+    name: str | None = None
+    email: EmailStr | None = None
+    secondary_email: EmailStr | None = None
+    phone: str | None = None
+    mobile: str | None = None
+    birth_date: date | None = None
 
 
 class CustomerStats(BaseModel):

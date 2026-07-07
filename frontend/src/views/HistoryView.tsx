@@ -5,19 +5,27 @@ import { Filter } from 'lucide-react';
 import { TransactionList } from '../components/TransactionList';
 import { FilterModal } from '../components/FilterModal';
 import { TransactionDetailModal } from '../components/TransactionDetailModal';
-import type { Transaction, TransactionFilters } from '../types';
+import { initialTransactionFilters, type Transaction, type TransactionFilters } from '../types';
 
-const initialFilters: TransactionFilters = {
-  startDate: '',
-  endDate: '',
-  store: '',
-  minValue: '',
-  maxValue: '',
-  operationType: 'all',
-};
+interface HistoryViewProps {
+  transactions: Transaction[];
+  transactionsError?: string | null;
+  hasMore?: boolean;
+  isLoadingMore?: boolean;
+  onLoadMore?: () => void;
+  filters: TransactionFilters;
+  onFiltersChange: (filters: TransactionFilters) => void;
+}
 
-export function HistoryView({ transactions }: { transactions: Transaction[] }) {
-  const [filters, setFilters] = useState<TransactionFilters>(initialFilters);
+export function HistoryView({
+  transactions,
+  transactionsError,
+  hasMore = false,
+  isLoadingMore = false,
+  onLoadMore,
+  filters,
+  onFiltersChange,
+}: HistoryViewProps) {
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
 
@@ -52,7 +60,7 @@ export function HistoryView({ transactions }: { transactions: Transaction[] }) {
     filters.maxValue !== '' ||
     filters.operationType !== 'all';
 
-  const handleClearFilters = () => setFilters(initialFilters);
+  const handleClearFilters = () => onFiltersChange(initialTransactionFilters);
 
   return (
     <main className="pt-4">
@@ -79,7 +87,11 @@ export function HistoryView({ transactions }: { transactions: Transaction[] }) {
         </div>
       )}
 
-      {filteredTransactions.length === 0 ? (
+      {transactionsError ? (
+        <div className="text-center py-12 animate-fade-in">
+          <p className="text-slate-400 text-sm">{transactionsError}</p>
+        </div>
+      ) : filteredTransactions.length === 0 ? (
         <div className="text-center py-12 animate-fade-in">
           <Filter size={48} className="mx-auto text-slate-600 mb-4" />
           <p className="text-slate-400 text-sm">Nenhuma transação encontrada</p>
@@ -101,6 +113,15 @@ export function HistoryView({ transactions }: { transactions: Transaction[] }) {
             transactions={filteredTransactions}
             onTransactionClick={setSelectedTransaction}
           />
+          {hasMore && (
+            <button
+              onClick={onLoadMore}
+              disabled={isLoadingMore}
+              className="w-full mt-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-sm font-semibold transition-smooth disabled:opacity-50"
+            >
+              {isLoadingMore ? 'Carregando...' : 'Carregar mais'}
+            </button>
+          )}
         </>
       )}
 
@@ -114,7 +135,7 @@ export function HistoryView({ transactions }: { transactions: Transaction[] }) {
         isOpen={isFilterModalOpen}
         onClose={() => setIsFilterModalOpen(false)}
         filters={filters}
-        onFiltersChange={setFilters}
+        onFiltersChange={onFiltersChange}
         onClearFilters={handleClearFilters}
         availableStores={availableStores}
       />

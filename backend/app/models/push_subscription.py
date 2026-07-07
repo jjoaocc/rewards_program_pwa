@@ -1,7 +1,9 @@
-from sqlalchemy import Column, String, Text, TIMESTAMP, ForeignKey, func, UniqueConstraint
+import uuid
+
+from sqlalchemy import TIMESTAMP, Column, ForeignKey, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-import uuid
+
 from app.core.database import Base
 
 
@@ -21,8 +23,6 @@ class PushSubscription(Base):
     user_agent = Column(String(500), nullable=True)
     created_at = Column(TIMESTAMP, server_default=func.now())
 
-    __table_args__ = (
-        UniqueConstraint("endpoint", name="uq_push_subscription_endpoint"),
-    )
+    __table_args__ = (UniqueConstraint("endpoint", name="uq_push_subscription_endpoint"),)
 
     customer = relationship("Customer", back_populates="push_subscriptions")

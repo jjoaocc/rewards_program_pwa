@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { apiClient, ApiError } from '../lib/api-client';
+import { z } from 'zod';
+import { apiClient, type ApiClientPort } from '../lib/api-client';
+import { getErrorMessage } from '../lib/api-error';
 
 interface Stats {
   totalEarned: number;
@@ -8,12 +10,12 @@ interface Stats {
   memberSince: string;
 }
 
-interface StatsApiResponse {
-  total_earned: string;
-  total_redeemed: string;
-  transaction_count: number;
-  member_since: string;
-}
+export const StatsApiResponseSchema = z.object({
+  total_earned: z.string(),
+  total_redeemed: z.string(),
+  transaction_count: z.number(),
+  member_since: z.string(),
+});
 
 interface UseStatsReturn {
   stats: Stats | null;
@@ -21,14 +23,15 @@ interface UseStatsReturn {
   error: string | null;
 }
 
-export function useStats(): UseStatsReturn {
+export function useStats(client: ApiClientPort = apiClient): UseStatsReturn {
   const [stats, setStats] = useState<Stats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchStats = useCallback(async () => {
     try {
-      const data = await apiClient.get<StatsApiResponse>('/customers/me/stats');
+      const raw = await client.get<unknown>('/customers/me/stats');
+      const data = StatsApiResponseSchema.parse(raw);
       setStats({
         totalEarned: parseFloat(data.total_earned),
         totalRedeemed: parseFloat(data.total_redeemed),
@@ -36,12 +39,12 @@ export function useStats(): UseStatsReturn {
         memberSince: data.member_since,
       });
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Erro ao carregar estatísticas.';
+      const message = getErrorMessage(err, 'Erro ao carregar estatísticas.');
       setError(message);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [client]);
 
   useEffect(() => {
     fetchStats();

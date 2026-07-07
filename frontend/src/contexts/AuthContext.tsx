@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
-import { apiClient, getStoredToken, setStoredToken, removeStoredToken, ApiError } from '../lib/api-client';
+import { apiClient, getStoredToken, setStoredToken, removeStoredToken, ApiError, type ApiClientPort } from '../lib/api-client';
 import type { AuthUser } from '../types';
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
@@ -27,7 +27,12 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // ─── Provider ────────────────────────────────────────────────────────────────
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+interface AuthProviderProps {
+  children: ReactNode;
+  client?: ApiClientPort;
+}
+
+export function AuthProvider({ children, client = apiClient }: AuthProviderProps) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -40,7 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Busca os dados do usuário autenticado via GET /auth/me
   const fetchCurrentUser = useCallback(async (): Promise<AuthUser | null> => {
     try {
-      const data = await apiClient.get<{
+      const data = await client.get<{
         id: string;
         name: string;
         email: string;
@@ -54,7 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       return null;
     }
-  }, []);
+  }, [client]);
 
   // Ao montar: verifica se já existe token salvo e valida no backend
   useEffect(() => {
@@ -96,7 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       // 1. Autentica e recebe o JWT
-      const { access_token } = await apiClient.post<LoginResponse>(
+      const { access_token } = await client.post<LoginResponse>(
         '/auth/login',
         { identifier, password },
         false, // não requer token (é o próprio login)
@@ -133,7 +138,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     clearSession();
     // POST /auth/logout é opcional (JWT é stateless), mas útil para logs futuros
-    apiClient.post('/auth/logout', {}).catch(() => {});
+    client.post('/auth/logout', {}).catch(() => {});
   };
 
   return (

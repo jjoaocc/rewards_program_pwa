@@ -1,5 +1,3 @@
-// src/views/LoginView.tsx (SUBSTITUIR ARQUIVO COMPLETO)
-
 import { useState } from 'react';
 import { Mail, Lock, LogIn, Trophy, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';

@@ -1,5 +1,5 @@
 # Dependências
-frontend/node_modules/
+node_modules/
 backend/__pycache__/
 backend/.venv/
 backend/venv/
@@ -40,7 +40,13 @@ Thumbs.db
 *.sqlite
 *.sqlite3
 
-# Testes
+# Testes / lint
 .pytest_cache/
+.ruff_cache/
 .coverage
 htmlcov/
+*.tsbuildinfo
+
+# Claude Code (config local da máquina, não do projeto)
+.claude/settings.local.json
+.claude/*.lock

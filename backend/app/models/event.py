@@ -1,11 +1,14 @@
-from sqlalchemy import Column, String, Text, DECIMAL, Date, Boolean, TIMESTAMP, func
-from sqlalchemy.dialects.postgresql import UUID
 import uuid
+
+from sqlalchemy import DECIMAL, TIMESTAMP, Boolean, Column, Date, String, Text, func
+from sqlalchemy.dialects.postgresql import UUID
+
 from app.core.database import Base
+
 
 class Event(Base):
     __tablename__ = "events"
-    
+
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=False)

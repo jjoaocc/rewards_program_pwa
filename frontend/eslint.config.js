@@ -19,5 +19,15 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+    rules: {
+      // eslint-plugin-react-hooks 7.x (necessário para suportar eslint 10) trouxe essa
+      // regra nova do conjunto do React Compiler, que passou a sinalizar como erro o
+      // padrão "fetch dentro de useEffect no mount" usado em praticamente todos os
+      // hooks de dados do projeto (useCustomer, useTransactions, useStats, etc.).
+      // É um padrão React válido e comum, não um bug — mas migrar todos os hooks pra
+      // longe desse padrão é um refactor de arquitetura à parte, fora do escopo de
+      // uma atualização de dependências. Rebaixado pra warning até decidirmos abordar.
+      'react-hooks/set-state-in-effect': 'warn',
+    },
   },
 ])

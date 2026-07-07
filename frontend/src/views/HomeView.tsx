@@ -13,10 +13,11 @@ import type { Customer, Transaction } from '../types';
 interface HomeViewProps {
   customer: Customer;
   transactions: Transaction[];
+  transactionsError?: string | null;
   onNavigateToExtrato: () => void;
 }
 
-export function HomeView({ customer, transactions, onNavigateToExtrato }: HomeViewProps) {
+export function HomeView({ customer, transactions, transactionsError, onNavigateToExtrato }: HomeViewProps) {
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
 
@@ -60,12 +61,16 @@ export function HomeView({ customer, transactions, onNavigateToExtrato }: HomeVi
           </button>
         </div>
 
-        <TransactionList
-          transactions={transactions.slice(0, 5)}
-          onTransactionClick={setSelectedTransaction}
-          showSeeAll
-          onSeeAll={onNavigateToExtrato}
-        />
+        {transactionsError ? (
+          <p className="text-slate-400 text-sm text-center py-8">{transactionsError}</p>
+        ) : (
+          <TransactionList
+            transactions={transactions.slice(0, 5)}
+            onTransactionClick={setSelectedTransaction}
+            showSeeAll
+            onSeeAll={onNavigateToExtrato}
+          />
+        )}
       </main>
 
       <TransactionDetailModal

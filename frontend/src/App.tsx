@@ -14,24 +14,10 @@ import { ProfileView } from './views/ProfileView';
 import { HelpCenterView } from './views/HelpCenterView';
 import { TermsView } from './views/TermsView';
 import { PrivacyView } from './views/PrivacyView';
-import type { ActivePage } from './types';
+import { initialTransactionFilters, type ActivePage, type TransactionFilters } from './types';
 
 function AppContent() {
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
-  const [activePage, setActivePage] = useState<ActivePage>('inicio');
-
-  const { customer, isLoading: isCustomerLoading, refetch: refetchCustomer } = useCustomer();
-  const { transactions, isLoading: isTransactionsLoading } = useTransactions();
-  const { stats } = useStats();
-
-  // Mescla stats da API no objeto customer
-  const customerWithStats = useMemo(() => {
-    if (!customer) return null;
-    return {
-      ...customer,
-      stats: stats ?? customer.stats,
-    };
-  }, [customer, stats]);
 
   if (isAuthLoading) {
     return (
@@ -42,6 +28,39 @@ function AppContent() {
   }
 
   if (!isAuthenticated) return <LoginView />;
+
+  // Monta só depois de autenticado: garante que useCustomer/useTransactions/useStats
+  // façam seu fetch inicial já com o token presente, em vez de reaproveitar o estado
+  // de uma tentativa anterior (feita sem token, antes do login).
+  return <AuthenticatedApp />;
+}
+
+function AuthenticatedApp() {
+  const [activePage, setActivePage] = useState<ActivePage>('inicio');
+  // Vive aqui (não dentro de HistoryView) de propósito: HistoryView remonta toda vez
+  // que a aba troca (o `key={activePage}` abaixo força isso pra animação de fade-in),
+  // então um filtro guardado só dentro dele seria perdido ao voltar pra essa aba.
+  const [transactionFilters, setTransactionFilters] = useState<TransactionFilters>(initialTransactionFilters);
+
+  const { customer, isLoading: isCustomerLoading, error: customerError, refetch: refetchCustomer } = useCustomer();
+  const {
+    transactions,
+    isLoading: isTransactionsLoading,
+    error: transactionsError,
+    hasMore: hasMoreTransactions,
+    isLoadingMore: isLoadingMoreTransactions,
+    loadMore: loadMoreTransactions,
+  } = useTransactions();
+  const { stats, error: statsError } = useStats();
+
+  // Mescla stats da API no objeto customer
+  const customerWithStats = useMemo(() => {
+    if (!customer) return null;
+    return {
+      ...customer,
+      stats: stats ?? customer.stats,
+    };
+  }, [customer, stats]);
 
   if (isCustomerLoading || isTransactionsLoading) {
     return (
@@ -55,7 +74,7 @@ function AppContent() {
   if (!customerWithStats) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-slate-900 p-6">
-        <p className="text-slate-300 text-center">Não foi possível carregar seus dados.<br />Tente novamente.</p>
+        <p className="text-slate-300 text-center">{customerError ?? 'Não foi possível carregar seus dados.'}<br />Tente novamente.</p>
         <button onClick={() => window.location.reload()} className="px-6 py-3 bg-blue-500 text-white rounded-xl font-semibold text-sm">
           Recarregar
         </button>
@@ -68,13 +87,37 @@ function AppContent() {
   const renderView = () => {
     switch (activePage) {
       case 'inicio':
-        return <HomeView customer={customerWithStats} transactions={transactions} onNavigateToExtrato={() => setActivePage('extrato')} />;
+        return (
+          <HomeView
+            customer={customerWithStats}
+            transactions={transactions}
+            transactionsError={transactionsError}
+            onNavigateToExtrato={() => setActivePage('extrato')}
+          />
+        );
       case 'extrato':
-        return <HistoryView transactions={transactions} />;
+        return (
+          <HistoryView
+            transactions={transactions}
+            transactionsError={transactionsError}
+            hasMore={hasMoreTransactions}
+            isLoadingMore={isLoadingMoreTransactions}
+            onLoadMore={loadMoreTransactions}
+            filters={transactionFilters}
+            onFiltersChange={setTransactionFilters}
+          />
+        );
       case 'eventos':
         return <EventsView />;
       case 'perfil':
-        return <ProfileView customer={customerWithStats} onNavigate={setActivePage} onUpdate={refetchCustomer} />;
+        return (
+          <ProfileView
+            customer={customerWithStats}
+            statsError={statsError}
+            onNavigate={setActivePage}
+            onUpdate={refetchCustomer}
+          />
+        );
       case 'ajuda':
         return <HelpCenterView onBack={() => setActivePage('perfil')} />;
       case 'termos':
@@ -82,7 +125,14 @@ function AppContent() {
       case 'privacidade':
         return <PrivacyView onBack={() => setActivePage('perfil')} />;
       default:
-        return <HomeView customer={customerWithStats} transactions={transactions} onNavigateToExtrato={() => setActivePage('extrato')} />;
+        return (
+          <HomeView
+            customer={customerWithStats}
+            transactions={transactions}
+            transactionsError={transactionsError}
+            onNavigateToExtrato={() => setActivePage('extrato')}
+          />
+        );
     }
   };
 

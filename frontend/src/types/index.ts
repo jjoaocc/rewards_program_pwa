@@ -116,3 +116,12 @@ export interface TransactionFilters {
   maxValue: string;
   operationType: OperationType;
 }
+
+export const initialTransactionFilters: TransactionFilters = {
+  startDate: '',
+  endDate: '',
+  store: '',
+  minValue: '',
+  maxValue: '',
+  operationType: 'all',
+};

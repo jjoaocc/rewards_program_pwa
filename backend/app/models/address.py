@@ -1,12 +1,15 @@
-from sqlalchemy import Column, String, Boolean, TIMESTAMP, ForeignKey, func
+import uuid
+
+from sqlalchemy import TIMESTAMP, Boolean, Column, ForeignKey, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-import uuid
+
 from app.core.database import Base
+
 
 class Address(Base):
     __tablename__ = "addresses"
-    
+
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     customer_id = Column(String(20), ForeignKey("customers.id", ondelete="CASCADE"), nullable=False)
     zip_code = Column(String(9), nullable=False)
@@ -18,6 +21,6 @@ class Address(Base):
     state = Column(String(2), nullable=False)
     is_primary = Column(Boolean, default=True)
     created_at = Column(TIMESTAMP, server_default=func.now())
-    
+
     # Relationships
     customer = relationship("Customer", back_populates="addresses")

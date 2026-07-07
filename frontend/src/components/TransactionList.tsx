@@ -1,3 +1,4 @@
+import { formatCurrency, formatDateShortWithYear } from '../lib/format';
 import type { Transaction } from '../types';
 
 interface TransactionListProps {
@@ -21,24 +22,20 @@ export function TransactionList({ transactions, onTransactionClick }: Transactio
             className="w-full animate-slide-up touch-feedback bg-slate-800/50 p-4 rounded-2xl flex justify-between items-center border border-slate-700 hover:border-slate-600 hover:bg-slate-800/80 transition-smooth cursor-pointer"
             style={{ animationDelay: `${index * 75}ms` }}
           >
-            <div className="text-left">
-              <p className="font-semibold text-slate-200">{t.description}</p>
-              <p className="text-xs text-slate-500 mt-1">
-                {new Date(t.date).toLocaleDateString('pt-BR', {
-                  day: '2-digit',
-                  month: 'short',
-                  year: 'numeric'
-                })}
+            <div className="text-left min-w-0 flex-1 pr-3">
+              <p className="font-semibold text-slate-200 truncate">{t.description}</p>
+              <p className="text-xs text-slate-500 mt-1 truncate">
+                {formatDateShortWithYear(t.date)}
                 {t.time && ` • ${t.time}`}
               </p>
             </div>
-            <div className="text-right">
+            <div className="text-right shrink-0">
               <span
-                className={`font-bold text-lg ${
+                className={`font-bold text-lg whitespace-nowrap ${
                   t.pointsEarned > 0 ? 'text-emerald-400' : 'text-rose-400'
                 }`}
               >
-                {t.pointsEarned > 0 ? '+' : '-'} R$ {Math.abs(t.pointsEarned).toFixed(2)}
+                {t.pointsEarned > 0 ? '+' : '-'} R$ {formatCurrency(Math.abs(t.pointsEarned))}
               </span>
             </div>
           </button>

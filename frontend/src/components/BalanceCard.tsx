@@ -1,3 +1,4 @@
+import { formatCurrency } from '../lib/format';
 import type { Customer } from '../types';
 
 export function BalanceCard({ customer }: { customer: Customer }) {
@@ -20,9 +21,9 @@ export function BalanceCard({ customer }: { customer: Customer }) {
       
       <div className="relative z-10">
         <p className="text-slate-400 text-sm font-medium">Seu saldo disponível</p>
-        <div className="flex items-baseline gap-2 mt-1">
-          <span className="text-4xl font-black text-white animate-scale-in">
-            R$ {customer.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+        <div className="flex items-baseline gap-2 mt-1 min-w-0">
+          <span className="text-4xl font-black text-white animate-scale-in break-all">
+            R$ {formatCurrency(customer.balance)}
           </span>
         </div>
         <p className="text-xs text-slate-500 mt-4 italic animate-fade-in">

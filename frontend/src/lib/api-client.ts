@@ -30,6 +30,19 @@ export class ApiError extends Error {
   }
 }
 
+// ─── Porta injetável ─────────────────────────────────────────────────────────
+// Interface que hooks/contexts dependem, em vez do objeto `apiClient` concreto.
+// Permite trocar a implementação (retry, cache, mocks de teste) sem tocar
+// em quem consome — só o parâmetro/prop `client` precisa de outro valor.
+
+export interface ApiClientPort {
+  get<T>(endpoint: string): Promise<T>;
+  post<T>(endpoint: string, body: unknown, requiresAuth?: boolean): Promise<T>;
+  put<T>(endpoint: string, body: unknown): Promise<T>;
+  patch<T>(endpoint: string, body: unknown): Promise<T>;
+  delete<T>(endpoint: string): Promise<T>;
+}
+
 // ─── Cliente HTTP base ───────────────────────────────────────────────────────
 
 type RequestOptions = {
@@ -88,7 +101,7 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
 
 // ─── API pública ─────────────────────────────────────────────────────────────
 
-export const apiClient = {
+export const apiClient: ApiClientPort = {
   get: <T>(endpoint: string) =>
     request<T>(endpoint, { method: 'GET' }),
 

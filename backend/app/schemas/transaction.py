@@ -1,8 +1,9 @@
-from pydantic import BaseModel, field_serializer
-from decimal import Decimal
 from datetime import datetime
-from typing import Optional, List
+from decimal import Decimal
 from uuid import UUID
+
+from pydantic import BaseModel, field_serializer
+
 
 class TransactionItemResponse(BaseModel):
     id: UUID
@@ -11,12 +12,13 @@ class TransactionItemResponse(BaseModel):
     unit_price: Decimal
     total_price: Decimal
 
-    @field_serializer('id')
+    @field_serializer("id")
     def serialize_id(self, value: UUID) -> str:
         return str(value)
 
     class Config:
         from_attributes = True
+
 
 class TransactionResponse(BaseModel):
     id: UUID
@@ -24,18 +26,19 @@ class TransactionResponse(BaseModel):
     type: str
     amount: Decimal
     description: str
-    store: Optional[str] = None
+    store: str | None = None
     created_at: datetime
-    items: List[TransactionItemResponse] = []
+    items: list[TransactionItemResponse] = []
 
-    @field_serializer('id')
+    @field_serializer("id")
     def serialize_id(self, value: UUID) -> str:
         return str(value)
 
     class Config:
         from_attributes = True
 
+
 class TransactionFilters(BaseModel):
-    start_date: Optional[datetime] = None
-    end_date: Optional[datetime] = None
-    type: Optional[str] = None
+    start_date: datetime | None = None
+    end_date: datetime | None = None
+    type: str | None = None

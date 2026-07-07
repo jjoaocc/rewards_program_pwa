@@ -1,11 +1,12 @@
 # 🏗️ Rewards Program — PWA de Fidelidade para Varejo
 
-MVP de programa de fidelidade/cashback desenvolvido como projeto real em produção. Permite que clientes visualizem saldo de recompensas, histórico de transações, eventos e promoções, e recebam notificações push — tudo via PWA instalável em qualquer dispositivo.
+Programa de fidelidade/cashback rodando em produção real. Clientes acompanham saldo de recompensas, histórico de transações, eventos/promoções e recebem notificações push — tudo via PWA instalável em qualquer dispositivo. Inclui um painel administrativo separado para disparo de notificações.
 
 > **Stack:** React 19 · TypeScript · Tailwind CSS v4 · FastAPI · PostgreSQL · Docker
 
-**Demo em produção:** [rewards.strokes.dev.br](https://rewards.strokes.dev.br)  
-**API docs (Swagger):** [api.rewards.strokes.dev.br/docs](https://api.rewards.strokes.dev.br/docs)
+**App:** [rewards.strokes.dev.br](https://rewards.strokes.dev.br)
+**Painel admin:** [rewards.strokes.dev.br/admin](https://rewards.strokes.dev.br/admin)
+**API docs (Swagger):** [api.strokes.dev.br/rewards/docs](https://api.strokes.dev.br/rewards/docs)
 
 ---
 
@@ -13,16 +14,18 @@ MVP de programa de fidelidade/cashback desenvolvido como projeto real em produç
 
 - [Funcionalidades](#-funcionalidades)
 - [Arquitetura](#-arquitetura)
+- [Segurança](#-segurança)
 - [Estrutura do Projeto](#-estrutura-do-projeto)
 - [Pré-requisitos](#-pré-requisitos)
 - [Configuração do Ambiente](#-configuração-do-ambiente)
 - [Banco de Dados](#-banco-de-dados)
+- [Testes](#-testes)
 - [Rodando Localmente](#-rodando-localmente)
 - [Deploy em Produção](#-deploy-em-produção)
 - [Push Notifications (VAPID)](#-push-notifications-vapid)
 - [Painel Admin](#-painel-admin)
 - [API Reference](#-api-reference)
-- [Frontend — Estrutura de Componentes](#-frontend--estrutura-de-componentes)
+- [Frontend — Estrutura e Padrões](#-frontend--estrutura-e-padrões)
 - [PWA — Instalação](#-pwa--instalação)
 - [Variáveis de Ambiente](#-variáveis-de-ambiente)
 - [Decisões Técnicas](#-decisões-técnicas)
@@ -35,13 +38,13 @@ MVP de programa de fidelidade/cashback desenvolvido como projeto real em produç
 |---|---|
 | Autenticação JWT (e-mail ou código do cliente) | ✅ |
 | Visualização de saldo de cashback (R$) | ✅ |
-| Histórico de transações com filtros avançados | ✅ |
+| Histórico de transações com filtros + paginação ("carregar mais") | ✅ |
 | Detalhe de transação com itens da compra | ✅ |
 | Eventos e promoções com carrossel | ✅ |
-| Notificações in-app (sino) | ✅ |
+| Notificações in-app (sino), com marcação de lida e remoção | ✅ |
 | Push Notifications via Web Push API (VAPID) | ✅ |
-| Painel admin para disparos de push | ✅ |
-| Perfil editável (dados pessoais + endereço) | ✅ |
+| Painel admin (app React próprio) — individual, seleção múltipla, broadcast e histórico de envios | ✅ |
+| Perfil editável (dados pessoais, e-mail principal/secundário, endereço) | ✅ |
 | PWA instalável (iOS, Android, Desktop) | ✅ |
 | Suporte a CPF (PF) e CNPJ (PJ) | ✅ |
 
@@ -50,29 +53,44 @@ MVP de programa de fidelidade/cashback desenvolvido como projeto real em produç
 ## 🏛️ Arquitetura
 
 ```
-                        Cloudflare (DNS + Proxy)
-                               │
-                    ┌──────────┴──────────┐
-                    │                     │
-           rewards.strokes.dev.br   api.rewards.strokes.dev.br
-                    │                     │
-             Nginx Proxy Manager  ←→  Nginx Proxy Manager
-                    │                     │
-            ┌───────┴──────┐    ┌─────────┴────────┐
-            │   Frontend   │    │     Backend       │
-            │ nginx:alpine │    │  FastAPI (Python) │
-            │  (porta 80)  │    │   (porta 8000)    │
-            └──────────────┘    └─────────┬─────────┘
-                                          │
-                                ┌─────────┴─────────┐
-                                │    PostgreSQL      │
-                                │  (rede separada)   │
-                                └───────────────────┘
+                              Cloudflare (DNS + Proxy)
+                                     │
+                    ┌────────────────┴─────────────────┐
+                    │                                   │
+           rewards.strokes.dev.br              api.strokes.dev.br
+                    │                        (compartilhado entre projetos)
+                    │                                   │
+             Nginx Proxy Manager                 Nginx Proxy Manager
+                    │                       Custom Location /rewards/
+                    │                    (encaminha removendo o prefixo)
+            ┌───────┴──────┐                            │
+            │   Frontend   │                  ┌─────────┴────────┐
+            │ nginx:alpine │                  │     Backend       │
+            │  (porta 80)  │                  │  FastAPI (Python) │
+            └──────────────┘                  │   (porta 8000)    │
+                                               └─────────┬─────────┘
+                                                         │
+                                               ┌─────────┴─────────┐
+                                               │    PostgreSQL      │
+                                               │  (rede separada)   │
+                                               └───────────────────┘
 ```
 
 **Redes Docker:**
-- `proxy-network` — conecta frontend e backend ao Nginx Proxy Manager
-- `database-network` — conecta backend ao PostgreSQL (isolado do frontend)
+- `proxy-network` — conecta frontend e backend ao Nginx Proxy Manager. Nenhum dos dois containers publica porta no host — só é alcançável via essa rede.
+- `database-network` — conecta backend ao PostgreSQL (isolado do frontend).
+
+O frontend é servido em `rewards.strokes.dev.br` (subdomínio próprio). O backend fica atrás de `api.strokes.dev.br`, um domínio compartilhado com outros projetos na mesma VPS, roteado por path (`/rewards/`) via Custom Location do Nginx Proxy Manager — o backend usa `ROOT_PATH` só para o Swagger/OpenAPI gerar os links públicos corretos.
+
+---
+
+## 🔐 Segurança
+
+- **Autenticação de cliente**: JWT (PyJWT) com `sub` = ID do cliente, expiração configurável (`ACCESS_TOKEN_EXPIRE_MINUTES`). Senhas com `bcrypt` puro (sem passlib).
+- **Rate limiting** (`slowapi`): 5/min em `/auth/login`, 5/min em `/push/admin/login`, 10/min nos envios de push admin. A chave de limite usa o primeiro IP de `X-Forwarded-For`, não `request.client.host` — necessário porque o backend só é alcançável via o proxy (Nginx Proxy Manager), então o IP de conexão direta seria sempre o do proxy, não o do cliente real.
+- **Security headers**: middleware próprio (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`) e uma Content-Security-Policy restritiva (`default-src 'self'`) em ambas as camadas (FastAPI e Nginx do frontend) — os endpoints de documentação (`/docs`, `/redoc`) ficam isentos da CSP mais estrita.
+- **Painel admin**: autenticação por secret (`PUSH_ADMIN_SECRET`), mas o painel nunca guarda esse secret no navegador — troca ele por um token de sessão de curta duração (JWT, 12h, `POST /push/admin/login`) e usa esse token (`Authorization: Bearer`) nas chamadas seguintes. O header `X-Admin-Secret` continua aceito como alternativa (scripts/automação).
+- **Paginação com teto**: todos os endpoints de listagem (`/transactions`, `/notifications`, `/products`) têm um limite máximo de itens por página, mesmo que o cliente peça mais.
 
 ---
 
@@ -80,105 +98,86 @@ MVP de programa de fidelidade/cashback desenvolvido como projeto real em produç
 
 ```
 rewards/
-├── backend/                        # FastAPI + Python
+├── backend/                            # FastAPI + Python 3.12
 │   ├── app/
 │   │   ├── api/
-│   │   │   ├── deps.py             # Injeção de dependências (get_db, get_current_customer)
+│   │   │   ├── deps.py                 # get_db, get_current_customer (JWT)
 │   │   │   └── v1/
-│   │   │       ├── __init__.py     # Registro de todos os routers
-│   │   │       ├── auth.py         # POST /auth/login, GET /auth/me
-│   │   │       ├── customers.py    # GET/PATCH /customers/me, GET /customers/me/stats
-│   │   │       ├── transactions.py # GET /transactions
-│   │   │       ├── notifications.py# GET /notifications, PATCH mark-read
-│   │   │       ├── products.py     # GET /products
-│   │   │       ├── events.py       # GET /events
-│   │   │       └── push.py         # Push notifications (subscribe, send, broadcast)
+│   │   │       ├── __init__.py         # Registro de todos os routers
+│   │   │       ├── auth.py             # login, logout, me
+│   │   │       ├── customers.py        # perfil e estatísticas
+│   │   │       ├── transactions.py     # histórico paginado
+│   │   │       ├── notifications.py    # listar, marcar lida, deletar
+│   │   │       ├── products.py         # catálogo (filtros)
+│   │   │       ├── events.py           # eventos/promoções
+│   │   │       └── push.py             # subscribe + endpoints do painel admin
 │   │   ├── core/
-│   │   │   ├── config.py           # Settings (pydantic-settings, lê do .env)
-│   │   │   ├── database.py         # SQLAlchemy engine + SessionLocal
-│   │   │   ├── security.py         # JWT, bcrypt (verify_password, create_access_token)
-│   │   │   └── push.py             # Serviço Web Push (pywebpush + limpeza de subs)
-│   │   ├── models/
-│   │   │   ├── __init__.py         # Exporta todos os models
-│   │   │   ├── customer.py         # Tabela customers
-│   │   │   ├── address.py          # Tabela addresses
-│   │   │   ├── transaction.py      # Tabela transactions
-│   │   │   ├── transaction_item.py # Tabela transaction_items
-│   │   │   ├── notification.py     # Tabela notifications
-│   │   │   ├── push_subscription.py# Tabela push_subscriptions
-│   │   │   ├── product.py          # Tabela products
-│   │   │   ├── redemption.py       # Tabela redemptions
-│   │   │   └── event.py            # Tabela events
-│   │   ├── schemas/
-│   │   │   ├── __init__.py         # Exporta todos os schemas
-│   │   │   ├── auth.py             # Token, TokenData
-│   │   │   ├── customer.py         # CustomerResponse, CustomerUpdate, CustomerStats
-│   │   │   ├── notification.py     # NotificationResponse, NotificationMarkRead
-│   │   │   ├── push.py             # PushSubscribeRequest, PushSendRequest, etc.
-│   │   │   └── ...                 # products, events, transactions
-│   │   └── main.py                 # App FastAPI, CORS, health check, routers
+│   │   │   ├── config.py               # Settings (pydantic-settings), get_settings() c/ lru_cache
+│   │   │   ├── database.py             # engine + SessionLocal
+│   │   │   ├── security.py             # JWT (cliente e admin), bcrypt
+│   │   │   ├── security_headers.py     # middleware de headers + CSP
+│   │   │   ├── limiter.py              # slowapi, key_func por X-Forwarded-For
+│   │   │   ├── pagination.py           # MAX_PAGE_SIZE compartilhado
+│   │   │   └── push.py                 # envio via pywebpush (porta WebPushSender injetável)
+│   │   ├── services/                   # regra de negócio, chamado pelos routers
+│   │   │   ├── auth_service.py
+│   │   │   ├── customer_service.py
+│   │   │   ├── transaction_service.py
+│   │   │   ├── notification_service.py
+│   │   │   ├── product_service.py
+│   │   │   ├── event_service.py
+│   │   │   └── push_service.py         # subscribe, envio individual/seleção/broadcast, campanhas
+│   │   ├── models/                     # SQLAlchemy — um arquivo por tabela
+│   │   ├── schemas/                    # Pydantic — request/response por domínio
+│   │   └── main.py                     # App FastAPI, middlewares, health check, routers
+│   ├── tests/                          # pytest + testcontainers (Postgres efêmero)
 │   ├── Dockerfile
-│   └── requirements.txt
+│   ├── requirements.txt
+│   ├── requirements-dev.txt
+│   └── pyproject.toml                  # config do pytest e do ruff
 │
-├── frontend/                       # React + TypeScript + Vite
-│   ├── public/
-│   │   ├── admin.html              # Painel admin de push (HTML estático, sem build)
-│   │   ├── logo.svg
-│   │   ├── pwa-192x192.png
-│   │   └── pwa-512x512.png
+├── frontend/                           # React 19 + TypeScript + Vite
+│   ├── public/                         # ícones, manifest, favicons
 │   ├── src/
-│   │   ├── components/
-│   │   │   ├── BalanceCard.tsx         # Card de saldo na home
-│   │   │   ├── TransactionList.tsx     # Lista de transações
-│   │   │   ├── TransactionDetailModal.tsx # Modal com detalhes + itens da compra
-│   │   │   ├── FilterModal.tsx         # Modal de filtros do extrato
-│   │   │   ├── NotificationBell.tsx    # Sino com badge de não lidas
-│   │   │   ├── NotificationModal.tsx   # Modal com lista de notificações
-│   │   │   └── PromotionDetailModal.tsx# Modal de detalhe de promoção
+│   │   ├── admin/                      # app React separado do painel admin (build multi-page)
+│   │   │   ├── components/             # LoginScreen, abas (Individual/Selected/Broadcast/History)...
+│   │   │   ├── hooks/                  # useAdminAuth, useCustomerSearch, useCampaignHistory...
+│   │   │   ├── lib/                    # admin-api-client (fetch com Bearer token)
+│   │   │   ├── AdminApp.tsx
+│   │   │   └── main.tsx
+│   │   ├── components/                 # componentes de UI compartilhados
+│   │   │   └── profile/                # seções da tela de Perfil
 │   │   ├── contexts/
 │   │   │   └── AuthContext.tsx         # JWT: login, logout, isAuthenticated
-│   │   ├── hooks/
-│   │   │   ├── useCustomer.ts          # GET /customers/me
-│   │   │   ├── useStats.ts             # GET /customers/me/stats
-│   │   │   ├── useTransactions.ts      # GET /transactions
-│   │   │   ├── useNotifications.ts     # GET /notifications + mark-read
-│   │   │   ├── useEvents.ts            # GET /events (mapeia para Campaign/Promotion)
-│   │   │   └── usePushNotifications.ts # Web Push: permissão, subscribe, unsubscribe
+│   │   ├── hooks/                      # um hook por recurso da API (useCustomer, useTransactions...)
 │   │   ├── lib/
-│   │   │   └── api-client.ts           # Wrapper de fetch com JWT + ApiError
+│   │   │   ├── api-client.ts           # fetch com JWT + ApiError (porta injetável)
+│   │   │   ├── api-error.ts            # helper compartilhado de mensagem de erro
+│   │   │   └── format.ts               # formatação de moeda/data (parsing seguro de timezone)
 │   │   ├── types/
-│   │   │   └── index.ts                # Interfaces TypeScript: Customer, Transaction...
-│   │   ├── views/
-│   │   │   ├── LoginView.tsx
-│   │   │   ├── HomeView.tsx            # Saldo + transações recentes
-│   │   │   ├── HistoryView.tsx         # Extrato completo com filtros
-│   │   │   ├── EventsView.tsx          # Carrossel + lista de promoções
-│   │   │   ├── ProfileView.tsx         # Dados pessoais + push opt-in/out
-│   │   │   ├── HelpCenterView.tsx
-│   │   │   ├── TermsView.tsx
-│   │   │   └── PrivacyView.tsx
-│   │   ├── App.tsx                     # Roteamento por estado (ActivePage), bottom nav
+│   │   │   └── index.ts                # interfaces TypeScript do domínio
+│   │   ├── views/                      # uma tela por rota (Home, Extrato, Eventos, Perfil...)
+│   │   ├── App.tsx                     # roteamento por estado (ActivePage), bottom nav
 │   │   ├── main.tsx
-│   │   ├── sw.ts                       # Service Worker (Workbox + push handler)
-│   │   └── index.css                   # Tailwind v4 + CSS custom properties + animações
-│   ├── nginx.conf                      # Config Nginx: SPA routing + cache de assets
-│   ├── Dockerfile                      # Multi-stage: node build → nginx serve
-│   ├── vite.config.ts                  # Vite + React SWC + VitePWA (injectManifest)
+│   │   ├── sw.ts                       # Service Worker (Workbox + handler de push)
+│   │   └── index.css                   # Tailwind v4 + design tokens + animações
+│   ├── admin.html                      # entry point do painel admin (Vite multi-page)
+│   ├── index.html                      # entry point do app principal
+│   ├── nginx.conf                      # SPA routing, cache de assets, CSP
+│   ├── Dockerfile                      # multi-stage: node build → nginx serve
+│   ├── vite.config.ts                  # multi-page build, PWA (injectManifest), vitest
 │   └── package.json
 │
 ├── database/
-│   ├── schema/
-│   │   └── init.sql                    # Schema base completo (criar do zero)
-│   ├── seeds/
-│   │   └── seed_data.sql               # Dados mock para desenvolvimento
-│   └── migrations/
-│       ├── 001_add_products_events_redemptions.sql
-│       ├── 002_add_transaction_items.sql
-│       └── 003_add_push_subscriptions.sql
+│   ├── schema/init.sql                 # schema base completo (criar do zero)
+│   ├── seeds/seed_data.sql             # dados mock para desenvolvimento
+│   └── migrations/                     # scripts SQL sequenciais (sem Alembic)
 │
 ├── docker-compose.yml
-├── .env.example                        # Template de variáveis (NUNCA commitar o .env)
-└── .gitignore
+├── .env.example                        # template de variáveis (NUNCA commitar o .env)
+├── .gitignore
+├── backend/.dockerignore
+└── frontend/.dockerignore
 ```
 
 ---
@@ -202,7 +201,7 @@ rewards/
 ### 1. Clone o repositório
 
 ```bash
-git clone https://github.com/seu-usuario/rewards.git
+git clone <url-do-seu-repositorio>
 cd rewards
 ```
 
@@ -213,7 +212,7 @@ cp .env.example .env
 nano .env
 ```
 
-Preencha **todas** as variáveis. Veja a seção [Variáveis de Ambiente](#-variáveis-de-ambiente) para detalhes de cada uma.
+Preencha **todas** as variáveis. Veja [Variáveis de Ambiente](#-variáveis-de-ambiente).
 
 ### 3. Gere as chaves VAPID (obrigatório para push notifications)
 
@@ -240,7 +239,7 @@ print('VAPID_PUBLIC_KEY=' + public)
 "
 ```
 
-Cole os valores no `.env`.
+Cole os valores no `.env`. As chaves são geradas **uma única vez** — rotacioná-las invalida todas as subscriptions existentes.
 
 ### 4. Gere uma SECRET_KEY segura
 
@@ -261,23 +260,26 @@ python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 ### Estrutura das tabelas
 
 ```
-customers          — Clientes (CPF ou CNPJ)
-  └── addresses    — Endereços (um primário por cliente)
-  └── transactions — Transações de cashback
+customers            — Clientes (CPF ou CNPJ), com e-mail principal e secundário
+  └── addresses       — Endereços (um primário por cliente)
+  └── transactions    — Transações de cashback
         └── transaction_items — Itens da compra
-  └── notifications — Notificações in-app
+  └── notifications   — Notificações in-app
   └── push_subscriptions — Subscriptions Web Push por dispositivo
-  └── redemptions  — Histórico de resgates (futuro)
 
-products           — Catálogo de produtos para resgate (futuro)
-events             — Eventos e promoções
+products              — Catálogo de produtos para resgate
+events                — Eventos e promoções
+push_campaigns         — Histórico de envios do painel admin (individual/seleção/broadcast)
 ```
 
 ### Inicialização do banco do zero
 
-**Pré-requisito:** ter o PostgreSQL rodando e acessível. O `DATABASE_URL` no `.env` deve apontar para ele.
+**Pré-requisito:** ter o PostgreSQL rodando e acessível, com a extensão `uuid-ossp` habilitada. O `DATABASE_URL` no `.env` deve apontar para ele.
 
-#### Opção A — Via Docker (recomendado para desenvolvimento)
+```bash
+# No psql, como superusuário
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+```
 
 ```bash
 # Sobe apenas o backend (que tem acesso ao banco)
@@ -289,27 +291,13 @@ docker exec -i rewards_backend psql "$DATABASE_URL" < database/schema/init.sql
 # Popula com dados mock (desenvolvimento)
 docker exec -i rewards_backend psql "$DATABASE_URL" < database/seeds/seed_data.sql
 
-# Aplica as migrações
-docker exec -i rewards_backend psql "$DATABASE_URL" < database/migrations/001_add_products_events_redemptions.sql
-docker exec -i rewards_backend psql "$DATABASE_URL" < database/migrations/002_add_transaction_items.sql
+# Aplica as migrações em ordem
+for f in database/migrations/*.sql; do
+  docker exec -i rewards_backend psql "$DATABASE_URL" < "$f"
+done
 ```
 
-> A migração 003 (`push_subscriptions`) é criada automaticamente pelo SQLAlchemy no primeiro `docker compose up`. O arquivo `.sql` existe apenas como documentação histórica.
-
-#### Opção B — Criação automática via SQLAlchemy
-
-O backend cria as tabelas automaticamente ao iniciar, desde que a extensão `uuid-ossp` já exista no banco:
-
-```bash
-# No psql, como superusuário
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-```
-
-Depois suba o backend normalmente:
-
-```bash
-docker compose up -d backend
-```
+> Não há um runner de migração automático (nem Alembic) — cada arquivo em `database/migrations/` é aplicado manualmente, uma vez, na ordem numérica.
 
 #### Verificar se as tabelas foram criadas
 
@@ -317,34 +305,74 @@ docker compose up -d backend
 docker exec -it rewards_backend python3 -c "
 from app.core.database import engine
 from sqlalchemy import inspect
-tables = inspect(engine).get_table_names()
-print('Tabelas criadas:', tables)
+print('Tabelas:', inspect(engine).get_table_names())
 "
 ```
 
 ### Usuários mock para testes
 
-Após rodar o `seed_data.sql`, os seguintes usuários estarão disponíveis:
+Após rodar o `seed_data.sql`, os seguintes usuários estarão disponíveis (senha `tmx` para todos):
 
-| Código | Nome | Senha | Tipo |
-|---|---|---|---|
-| `7742` | João Silva | `tmx` | CPF |
-| `8851` | Maria Santos | `tmx` | CPF |
-| `9923` | Pedro Oliveira | `tmx` | CPF |
-| `5501` | Construções Silva Ltda | `tmx` | CNPJ |
-| `3342` | Ana Costa | `tmx` | CPF |
+| Código | Nome | Tipo |
+|---|---|---|
+| `7742` | João Silva | CPF |
+| `8851` | Maria Santos | CPF |
+| `9923` | Pedro Oliveira | CPF |
+| `5501` | Construções Silva Ltda | CNPJ |
+| `3342` | Ana Costa | CPF |
 
 O login aceita tanto o código numérico quanto o e-mail cadastrado.
 
 ### Migrações
 
-As migrações são scripts SQL manuais (sem Alembic no MVP). O histórico está em `database/migrations/`:
-
 | Arquivo | Descrição |
 |---|---|
-| `001_add_products_events_redemptions.sql` | Tabelas `products`, `events`, `redemptions` + dados mock |
+| `001_add_products_events_redemptions.sql` | Tabelas `products`, `events` + dados mock |
 | `002_add_transaction_items.sql` | Tabela `transaction_items` + dados mock de itens |
 | `003_add_push_subscriptions.sql` | Tabela `push_subscriptions` (documentação — criada pelo SQLAlchemy) |
+| `004_remove_redemptions.sql` | Remove a tabela de resgates (feature nunca teve endpoint na API) |
+| `005_add_customer_secondary_email.sql` | Coluna `secondary_email` em `customers` |
+| `006_add_push_campaigns.sql` | Tabela `push_campaigns` (histórico de envios do painel admin) |
+
+---
+
+## 🧪 Testes
+
+### Backend — pytest + testcontainers
+
+Sobe um PostgreSQL efêmero em container pra rodar a suíte, sem precisar de um banco local configurado:
+
+```bash
+cd backend
+pip install -r requirements.txt -r requirements-dev.txt
+pytest -v --cov=app
+```
+
+~100 testes, cobertura ~99%. Cada teste roda numa transação com savepoint que é revertida ao final (isolamento rápido, sem recriar o schema a cada teste).
+
+Lint e formatação (ruff):
+
+```bash
+ruff check .
+ruff format .
+```
+
+### Frontend — vitest + React Testing Library
+
+```bash
+cd frontend
+npm install
+npm test          # roda uma vez
+npm run test:watch  # modo watch
+```
+
+~168 testes (hooks, componentes, views e o app admin), usando portas injetáveis (`ApiClientPort`/`AdminApiClientPort`) em vez de mockar módulos inteiros sempre que possível.
+
+```bash
+npx tsc -b --noEmit   # type-check
+npm run lint          # eslint
+npm run build         # build de produção (valida os dois entry points: app + admin)
+```
 
 ---
 
@@ -367,7 +395,8 @@ docker compose up -d --build
 cd frontend
 npm install
 npm run dev
-# Disponível em http://localhost:5173
+# App principal em http://localhost:5173
+# Painel admin em http://localhost:5173/admin.html
 ```
 
 > Certifique-se de que o `VITE_API_URL` no `.env` aponta para o backend correto.
@@ -386,7 +415,7 @@ uvicorn app.main:app --reload --port 8000
 
 ## 🚀 Deploy em Produção
 
-O projeto usa **Nginx Proxy Manager** como reverse proxy na VPS com SSL automático via Let's Encrypt e **Cloudflare** para DNS.
+O projeto usa **Nginx Proxy Manager** como reverse proxy na VPS com SSL automático via Let's Encrypt e **Cloudflare** para DNS. Backend e frontend não publicam porta nenhuma no host — só são alcançáveis via a rede Docker do proxy.
 
 ### Estrutura de redes Docker
 
@@ -400,37 +429,53 @@ docker network create database-network
 ### Deploy completo
 
 ```bash
-# Na VPS, dentro de /opt/containers/rewards
+# Na VPS, dentro do diretório do projeto
 git pull origin main
 docker compose up -d --build
+
+# Depois de recriar o backend/frontend, force o Nginx Proxy Manager a reconhecer
+# o novo IP do container (ele cacheia o IP anterior):
+docker exec nginx-proxy-manager nginx -s reload
 ```
 
 ### Deploy apenas de um serviço
 
 ```bash
-# Apenas backend
 docker compose up -d --build backend
-
-# Apenas frontend
 docker compose up -d --build frontend
 ```
 
 ### Configuração do Nginx Proxy Manager
 
-Crie dois **Proxy Hosts**:
+1. **Proxy Host do frontend** (dedicado a este projeto):
 
-| Domain | Forward Hostname | Forward Port |
-|---|---|---|
-| `rewards.strokes.dev.br` | `rewards_frontend` | `80` |
-| `api.rewards.strokes.dev.br` | `rewards_backend` | `8000` |
+   | Domain | Forward Hostname | Forward Port |
+   |---|---|---|
+   | `rewards.strokes.dev.br` | `rewards_frontend` | `80` |
 
-Ative SSL em ambos (Let's Encrypt) e force HTTPS.
+2. **Custom Location no Proxy Host `api.strokes.dev.br`** (compartilhado entre projetos):
+
+   | Location | Forward Hostname | Forward Port |
+   |---|---|---|
+   | `/rewards/` | `rewards_backend` | `8000` |
+
+   > A barra final em `/rewards/` faz o Nginx remover o prefixo antes de repassar a requisição ao container — o backend continua recebendo `/api/v1/...`, `/health`, `/docs`, etc. como se estivesse na raiz. `ROOT_PATH=/rewards` no `.env` só existe para o Swagger/OpenAPI gerar os links públicos corretos.
+
+Ative SSL (Let's Encrypt) e force HTTPS em ambos os Proxy Hosts.
+
+### Migrações em produção
+
+Aplicadas manualmente, uma vez, direto no container do Postgres:
+
+```bash
+docker exec -i postgres psql -U dbuser -d rewards_db < database/migrations/00X_nome.sql
+```
 
 ---
 
 ## 🔔 Push Notifications (VAPID)
 
-O sistema usa **Web Push API** com VAPID — sem dependência de serviços externos (OneSignal, Firebase, etc.). O mesmo código funciona em iOS Safari (16.4+), Android Chrome/Firefox e navegadores desktop.
+Web Push API com VAPID — sem dependência de serviços externos (OneSignal, Firebase, etc.). Funciona em iOS Safari (16.4+), Android Chrome/Firefox e navegadores desktop.
 
 ### Fluxo completo
 
@@ -442,52 +487,35 @@ O sistema usa **Web Push API** com VAPID — sem dependência de serviços exter
 5. Envia para POST /push/subscribe (requer JWT)
 6. Backend salva em push_subscriptions no PostgreSQL
 
-7. Admin acessa /admin.html → envia push
-8. Backend usa pywebpush → envia para Apple APNs / Mozilla Push / Google FCM
+7. Admin acessa /admin → envia push (individual, seleção de clientes ou broadcast)
+8. Backend cria a notificação in-app + usa pywebpush para o envio real
 9. Dispositivo recebe push mesmo com app fechado
 10. Clique na notificação → Service Worker abre o app
 ```
 
-### Gerando as chaves VAPID
-
-Veja a seção [Configuração do Ambiente](#-configuração-do-ambiente), passo 3.
-
-As chaves são geradas **uma única vez** e nunca devem ser rotacionadas (isso invalidaria todas as subscriptions existentes).
-
 ### Testando via curl
 
 ```bash
-# Enviar para um cliente específico
-curl -X POST https://api.rewards.strokes.dev.br/api/v1/push/send \
+# Login do painel admin → token de sessão
+TOKEN=$(curl -s -X POST https://api.strokes.dev.br/rewards/api/v1/push/admin/login \
   -H "Content-Type: application/json" \
-  -H "X-Admin-Secret: SEU_PUSH_ADMIN_SECRET" \
-  -d '{
-    "customer_id": "7742",
-    "title": "🎉 Promoção especial!",
-    "message": "Cimento com 20% OFF hoje!",
-    "url": "/"
-  }'
+  -d '{"secret": "SEU_PUSH_ADMIN_SECRET"}' | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])")
+
+# Enviar para um cliente específico
+curl -X POST https://api.strokes.dev.br/rewards/api/v1/push/send \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"customer_id": "7742", "title": "🎉 Promoção especial!", "message": "Cimento com 20% OFF hoje!", "url": "/"}'
 
 # Broadcast para todos os clientes
-curl -X POST https://api.rewards.strokes.dev.br/api/v1/push/broadcast \
-  -H "Content-Type: application/json" \
-  -H "X-Admin-Secret: SEU_PUSH_ADMIN_SECRET" \
-  -d '{
-    "title": "📢 Novidades na loja!",
-    "message": "Confira os novos eventos e promoções.",
-    "url": "/"
-  }'
+curl -X POST https://api.strokes.dev.br/rewards/api/v1/push/broadcast \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"title": "📢 Novidades na loja!", "message": "Confira os novos eventos e promoções.", "url": "/"}'
 ```
 
 ### Resposta esperada
 
 ```json
-{
-  "message": "Push enviado",
-  "sent": 2,
-  "failed": 0,
-  "removed": 0
-}
+{ "message": "Push enviado", "sent": 2, "failed": 0, "removed": 0 }
 ```
 
 > `removed` indica subscriptions expiradas que foram automaticamente limpas do banco.
@@ -496,94 +524,102 @@ curl -X POST https://api.rewards.strokes.dev.br/api/v1/push/broadcast \
 
 ## 🛡️ Painel Admin
 
-Disponível em `/admin.html` (arquivo estático, sem autenticação de usuário — acesso por senha secreta).
+App React separado (build multi-page do Vite), não misturado com o bundle do app do cliente.
 
-**URL:** `https://rewards.strokes.dev.br/admin.html`
-
+**URL:** `https://rewards.strokes.dev.br/admin` (ou `/admin.html`)
 **Senha:** valor de `PUSH_ADMIN_SECRET` no `.env`
 
-### Funcionalidades
+### Abas
 
-- **Aba Individual** — enviar push para um cliente específico pelo código (ex: `7742`)
-- **Aba Broadcast** — enviar para todos os clientes com notificações ativas
-- Auto-login: a senha é salva no `localStorage` do navegador após o primeiro acesso
-- Feedback visual com contagem de dispositivos alcançados
+- **👤 Individual** — busca um cliente (nome, e-mail ou ID) e envia push pra ele
+- **🎯 Selecionados** — busca e seleciona vários clientes, envia pra todos de uma vez (reporta IDs não encontrados, se houver)
+- **📢 Broadcast** — envia pra todos os clientes com notificações ativas (com confirmação)
+- **🕒 Histórico** — lista os envios recentes (tipo de alvo, quantos foram atingidos, enviados/falhados/removidos, quando)
+
+Todas as abas têm pré-visualização em tempo real de como a notificação vai aparecer. O login troca a senha por um token de sessão (12h) — o secret em si nunca fica salvo no navegador.
 
 ---
 
 ## 📡 API Reference
 
-Base URL: `https://api.rewards.strokes.dev.br/api/v1`
+Base URL: `https://api.strokes.dev.br/rewards/api/v1`
 
 Documentação interativa completa: `/docs` (Swagger UI)
 
 ### Autenticação
 
-Todos os endpoints (exceto `/auth/login` e `/push/vapid-public-key`) requerem:
+Endpoints de cliente (exceto `/auth/login` e `/push/vapid-public-key`) requerem:
 ```
 Authorization: Bearer <JWT_TOKEN>
 ```
 
-O token expira em 24 horas (configurável via `ACCESS_TOKEN_EXPIRE_MINUTES`).
+Endpoints do painel admin (`/push/send`, `/push/send-bulk`, `/push/broadcast`, `/push/admin/*`) requerem `Authorization: Bearer <token de admin>` (obtido em `/push/admin/login`) ou o header `X-Admin-Secret`.
 
-### Endpoints principais
+### Endpoints
 
 | Método | Rota | Auth | Descrição |
 |---|---|---|---|
 | POST | `/auth/login` | ❌ | Login com e-mail/código + senha |
+| POST | `/auth/logout` | ❌ | Logout (JWT é stateless — cosmético) |
 | GET | `/auth/me` | JWT | Dados do usuário autenticado |
 | GET | `/customers/me` | JWT | Perfil completo do cliente |
 | PATCH | `/customers/me` | JWT | Atualizar dados do perfil |
 | GET | `/customers/me/stats` | JWT | Estatísticas (total acumulado, resgatado) |
-| GET | `/transactions` | JWT | Histórico de transações com itens |
+| GET | `/transactions` | JWT | Histórico paginado (`limit`, `offset`) |
 | GET | `/notifications` | JWT | Notificações do cliente |
-| PATCH | `/notifications/mark-read` | JWT | Marcar como lidas |
+| PATCH | `/notifications/mark-read` | JWT | Marcar notificações específicas como lidas |
 | PATCH | `/notifications/mark-all-read` | JWT | Marcar todas como lidas |
+| DELETE | `/notifications/{id}` | JWT | Remover uma notificação |
 | GET | `/events` | JWT | Eventos e promoções ativos |
-| GET | `/products` | JWT | Catálogo de produtos para resgate |
+| GET | `/products` | ❌ | Catálogo de produtos (com filtros) |
+| GET | `/products/{id}` | ❌ | Detalhe de um produto |
 | GET | `/push/vapid-public-key` | ❌ | Chave pública VAPID |
 | POST | `/push/subscribe` | JWT | Registrar subscription do dispositivo |
-| DELETE | `/push/unsubscribe` | JWT | Remover subscription |
-| POST | `/push/send` | Admin Secret | Enviar push para cliente |
-| POST | `/push/broadcast` | Admin Secret | Enviar push para todos |
-
-O **Admin Secret** é passado via header: `X-Admin-Secret: <PUSH_ADMIN_SECRET>`
+| DELETE | `/push/unsubscribe` | JWT | Remover subscriptions do cliente |
+| POST | `/push/admin/login` | ❌ | Troca `PUSH_ADMIN_SECRET` por token de sessão |
+| GET | `/push/admin/customers` | Admin | Busca clientes (nome/e-mail/ID) |
+| GET | `/push/admin/campaigns` | Admin | Histórico de envios |
+| POST | `/push/send` | Admin | Enviar push pra um cliente |
+| POST | `/push/send-bulk` | Admin | Enviar push pra uma lista de clientes |
+| POST | `/push/broadcast` | Admin | Enviar push pra todos |
 
 ---
 
-## 🎨 Frontend — Estrutura de Componentes
+## 🎨 Frontend — Estrutura e Padrões
 
 ### Roteamento
 
-O app usa **roteamento por estado** (`useState<ActivePage>`) em vez de React Router — simples e eficiente para um SPA mobile-first:
+O app principal usa **roteamento por estado** (`useState<ActivePage>`) em vez de React Router — simples para um SPA mobile-first de tela única:
 
 ```typescript
 type ActivePage = 'inicio' | 'extrato' | 'eventos' | 'perfil' | 'ajuda' | 'termos' | 'privacidade'
 ```
 
+O painel admin (`src/admin/`) é outro app React inteiramente separado, com seu próprio entry point e bundle — não compartilha rota nem estado com o app do cliente.
+
 ### Fluxo de dados
 
 ```
-App.tsx
-  ├── useCustomer()     → GET /customers/me
-  ├── useTransactions() → GET /transactions
-  ├── useStats()        → GET /customers/me/stats
+App.tsx (AuthenticatedApp)
+  ├── useCustomer()      → GET /customers/me
+  ├── useTransactions()  → GET /transactions (paginado)
+  ├── useStats()         → GET /customers/me/stats
   │     ↓ merge em customerWithStats (useMemo)
   ├── HomeView    ← customer + transactions
-  ├── HistoryView ← transactions (filtros locais via useMemo)
+  ├── HistoryView ← transactions + filtros (estado vive em App.tsx, sobrevive à troca de aba)
   ├── EventsView  ← useEvents() → GET /events
   └── ProfileView ← customer + usePushNotifications()
 ```
 
+Cada hook de dados valida a resposta da API em runtime com **zod** (`XxxApiResponseSchema`) antes de mapear pro tipo de domínio — pega divergências de schema que o TypeScript sozinho não detectaria.
+
+### Portas injetáveis
+
+`ApiClientPort` (app principal) e `AdminApiClientPort` (painel admin) são interfaces que os hooks recebem por parâmetro, com o cliente HTTP real como valor padrão. Testes injetam um cliente fake em vez de mockar o módulo inteiro.
+
 ### Service Worker
 
-O Service Worker (`src/sw.ts`) usa **Workbox com injectManifest** para:
-- Precaching de todos os assets do build (via `self.__WB_MANIFEST`)
-- Limpeza de caches desatualizados
-- Handler de `push` events (notificações)
-- Handler de `notificationclick` (navegação ao clicar)
-
-O registro é automático via `vite-plugin-pwa` com `registerType: 'autoUpdate'`.
+`src/sw.ts` usa Workbox (`injectManifest`) para precache dos assets do app principal, limpeza de caches antigos e os handlers de `push`/`notificationclick`. O painel admin (`admin.html` e seu bundle) é excluído do precache de propósito — não faz parte da experiência offline do cliente.
 
 ---
 
@@ -618,32 +654,34 @@ Copie `.env.example` para `.env` e preencha:
 
 ```bash
 # ── Banco de Dados ──────────────────────────────────────────────────────────
-# Formato: postgresql+psycopg://usuario:senha@host:porta/banco
 DATABASE_URL=postgresql+psycopg://dbuser:SENHA@postgres:5432/rewards_db
 
+# ── Debug ───────────────────────────────────────────────────────────────────
+DEBUG=false
+
 # ── Segurança JWT ───────────────────────────────────────────────────────────
-# Gerar com: python3 -c "import secrets; print(secrets.token_hex(32))"
-SECRET_KEY=CHAVE_FORTE_AQUI
+SECRET_KEY=GERE_UMA_CHAVE_FORTE_AQUI       # python3 -c "import secrets; print(secrets.token_hex(32))"
 ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=1440   # 24 horas
+ACCESS_TOKEN_EXPIRE_MINUTES=1440           # 24 horas
 
 # ── CORS ────────────────────────────────────────────────────────────────────
-# Em produção, apenas o domínio do frontend
 CORS_ORIGINS=["https://rewards.strokes.dev.br"]
 
 # ── API ─────────────────────────────────────────────────────────────────────
 API_V1_PREFIX=/api/v1
 
+# ── Prefixo externo (path-based routing atrás do proxy compartilhado) ───────
+# Vazio em desenvolvimento local.
+ROOT_PATH=/rewards
+
+# ── Frontend (build arg do Docker) ──────────────────────────────────────────
+VITE_API_URL=https://api.strokes.dev.br/rewards/api/v1
+
 # ── Push Notifications (VAPID) ──────────────────────────────────────────────
-# Gerar conforme instruções em "Configuração do Ambiente"
 VAPID_PRIVATE_KEY=CHAVE_PRIVADA_BASE64
 VAPID_PUBLIC_KEY=CHAVE_PUBLICA_BASE64
 VAPID_ADMIN_EMAIL=admin@seudominio.com.br
-# Gerar com: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
-PUSH_ADMIN_SECRET=SENHA_FORTE_AQUI
-
-# ── Frontend (build arg do Docker) ──────────────────────────────────────────
-VITE_API_URL=https://api.rewards.strokes.dev.br/api/v1
+PUSH_ADMIN_SECRET=SENHA_FORTE_AQUI         # python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
 > ⚠️ O arquivo `.env` está no `.gitignore` e **nunca deve ser commitado**. Apenas o `.env.example` vai para o repositório.
@@ -654,56 +692,66 @@ VITE_API_URL=https://api.rewards.strokes.dev.br/api/v1
 
 ### Por que roteamento por estado em vez de React Router?
 
-Para um PWA mobile-first com uma única tela visível por vez e bottom nav, o gerenciamento via `useState<ActivePage>` é mais simples, sem overhead de configuração e funciona perfeitamente com as animações de transição de página.
+Para um PWA mobile-first com uma única tela visível por vez e bottom nav, `useState<ActivePage>` é mais simples, sem overhead de configuração, e funciona bem com as animações de transição.
 
-### Por que Tailwind CSS v4?
+### Por que uma camada de serviços separada dos routers?
 
-Engine completamente nova (Rust/Lightning CSS), sem arquivo de configuração obrigatório, tempos de build até 5× menores. As classes utility-first eliminam a necessidade de bibliotecas de UI complexas (MUI, Chakra), mantendo o bundle enxuto.
+Os routers (`app/api/v1/*.py`) só lidam com HTTP (validação de request, status codes, dependências). Toda regra de negócio (queries, regras de posse, agregações) fica em `app/services/*.py` — mais fácil de testar isoladamente e de reaproveitar entre endpoints.
+
+### Por que zod no frontend, se já tem TypeScript?
+
+TypeScript só valida em tempo de compilação — não protege contra a API real devolver um formato diferente do esperado em runtime. Os schemas zod (`XxxApiResponseSchema`) validam a resposta de fato antes de confiar nela, e o tipo TypeScript é inferido do schema (`z.infer`), então os dois nunca divergem.
 
 ### Por que Web Push com VAPID em vez de Firebase/OneSignal?
 
-Zero custo, zero dependência externa, dados ficam no seu banco, mesmo código funciona em todos os browsers. A única limitação é iOS 16.4+ — mas o app já era PWA-only.
+Zero custo, zero dependência externa, dados ficam no próprio banco, mesmo código funciona em todos os browsers. A limitação é iOS 16.4+ — mas o app já é PWA-only.
 
-### Por que bcrypt==4.0.1 fixado?
+### Por que o painel admin é um app React separado (não parte do bundle principal)?
 
-Python 3.14 quebrou compatibilidade com versões mais recentes do bcrypt via `passlib`. A versão 4.0.1 é a última com suporte estável nessa combinação.
+Cresceu de um HTML estático simples para uma ferramenta com estado real (busca, seleção múltipla, sessão, histórico). Separar em outro entry point do Vite mantém o bundle do cliente enxuto (o painel não é baixado por quem só usa o app) e permite reaproveitar os mesmos padrões (portas injetáveis, hooks, testes) do resto do frontend.
 
 ### Por que não Alembic para migrações?
 
-MVP com esquema estável. Scripts SQL manuais em `database/migrations/` são mais simples de entender, revisar e executar. Alembic faz sentido quando o schema evolui frequentemente com múltiplos developers.
+Schema estável, um único desenvolvedor. Scripts SQL manuais e sequenciais em `database/migrations/` são mais simples de ler e aplicar. Alembic compensa quando o schema muda com frequência e/ou em equipe.
 
-### Por que `injectManifest` em vez de `generateSW`?
+### Por que `injectManifest` em vez de `generateSW` no service worker?
 
-O `generateSW` gera um Service Worker automático sem suporte a handlers customizados. O `injectManifest` permite controlar o SW completamente — necessário para o handler de `push events` das notificações.
+`generateSW` não permite handlers customizados. `injectManifest` dá controle total sobre o Service Worker — necessário para o handler de `push` das notificações.
 
 ---
 
 ## 📦 Versões das dependências principais
 
 ### Backend
+
 | Pacote | Versão |
 |---|---|
 | Python | 3.12 |
-| FastAPI | 0.115.6 |
+| FastAPI | 0.139.0 |
+| Uvicorn | 0.50.0 |
 | SQLAlchemy | 2.0.36 |
 | Pydantic | 2.12.5 |
 | psycopg | 3.3.3 |
+| PyJWT | 2.13.0 |
+| bcrypt | 5.0.0 |
 | pywebpush | 2.0.0 |
-| bcrypt | 4.0.1 |
-| uvicorn | 0.34.0 |
+| slowapi | 0.1.9 |
 
 ### Frontend
+
 | Pacote | Versão |
 |---|---|
 | React | 19.2.0 |
-| TypeScript | 5.9.x |
-| Vite | 7.x |
-| Tailwind CSS | 4.1.x |
-| vite-plugin-pwa | 1.2.0 |
-| lucide-react | 0.563.0 |
+| TypeScript | ~6.0.3 |
+| Vite | ^8.1.3 |
+| Tailwind CSS | ^4.1.18 |
+| zod | ^4.4.3 |
+| vite-plugin-pwa | ^1.3.0 |
+| lucide-react | ^1.23.0 |
+| vitest | ^4.1.9 |
 
 ---
 
 ## 📝 Licença
 
-Projeto privado desenvolvido para fins profissionais e educacionais. Joinville, SC — 2026.
+Projeto privado desenvolvido para fins profissionais e educacionais. Joinville, SC.

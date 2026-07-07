@@ -1,8 +1,11 @@
-from sqlalchemy import Column, String, Text, DECIMAL, TIMESTAMP, ForeignKey, func
+import uuid
+
+from sqlalchemy import DECIMAL, TIMESTAMP, Column, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-import uuid
+
 from app.core.database import Base
+
 
 class Transaction(Base):
     __tablename__ = "transactions"

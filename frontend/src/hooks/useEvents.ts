@@ -1,20 +1,24 @@
 // src/hooks/useEvents.ts
 
 import { useState, useEffect, useCallback } from 'react';
-import { apiClient, ApiError } from '../lib/api-client';
+import { z } from 'zod';
+import { apiClient, type ApiClientPort } from '../lib/api-client';
+import { getErrorMessage } from '../lib/api-error';
 import type { Campaign, Promotion } from '../types';
 
-interface EventApiResponse {
-  id: string;
-  title: string;
-  description: string;
-  discount: string;
-  start_date: string;
-  end_date: string;
-  image_url?: string;
-  active: boolean;
-  created_at: string;
-}
+export const EventApiResponseSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  description: z.string(),
+  discount: z.string(),
+  start_date: z.string(),
+  end_date: z.string(),
+  image_url: z.string().nullish(),
+  active: z.boolean(),
+  created_at: z.string(),
+});
+
+type EventApiResponse = z.infer<typeof EventApiResponseSchema>;
 
 // Paleta de cores para o carrossel (rotativa por índice)
 const HIGHLIGHT_COLORS = [
@@ -56,7 +60,7 @@ interface UseEventsReturn {
   error: string | null;
 }
 
-export function useEvents(): UseEventsReturn {
+export function useEvents(client: ApiClientPort = apiClient): UseEventsReturn {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -64,16 +68,17 @@ export function useEvents(): UseEventsReturn {
 
   const fetchEvents = useCallback(async () => {
     try {
-      const data = await apiClient.get<EventApiResponse[]>('/events');
+      const raw = await client.get<unknown>('/events');
+      const data = z.array(EventApiResponseSchema).parse(raw);
       setCampaigns(data.map(mapToCampaign));
       setPromotions(data.map(mapToPromotion));
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Erro ao carregar eventos.';
+      const message = getErrorMessage(err, 'Erro ao carregar eventos.');
       setError(message);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [client]);
 
   useEffect(() => {
     fetchEvents();

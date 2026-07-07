@@ -1,4 +1,5 @@
 import { X, Tag, Calendar, Store, AlertCircle, TrendingDown } from 'lucide-react';
+import { formatCurrency, formatDateLong } from '../lib/format';
 import type { Promotion } from '../types';
 
 interface PromotionDetailModalProps {
@@ -14,14 +15,6 @@ export function PromotionDetailModal({ promotion, isOpen, onClose }: PromotionDe
   const originalPrice = 100; // Base de R$ 100
   const discountedPrice = originalPrice * (1 - promotion.discount / 100);
   const savings = originalPrice - discountedPrice;
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: 'long',
-      year: 'numeric'
-    });
-  };
 
   return (
     <>
@@ -70,13 +63,13 @@ export function PromotionDetailModal({ promotion, isOpen, onClose }: PromotionDe
               </div>
               <p className="text-xs text-slate-400 mb-1">Preço Original</p>
               <p className="text-lg font-bold text-slate-400 line-through">
-                R$ {originalPrice.toFixed(2)}
+                R$ {formatCurrency(originalPrice)}
               </p>
             </div>
             <div className="bg-gradient-to-br from-emerald-500/10 to-transparent border border-emerald-500/20 rounded-xl p-4">
               <p className="text-xs text-emerald-400 mb-1">Preço Promocional</p>
               <p className="text-2xl font-black text-emerald-400">
-                R$ {discountedPrice.toFixed(2)}
+                R$ {formatCurrency(discountedPrice)}
               </p>
             </div>
           </div>
@@ -88,7 +81,7 @@ export function PromotionDetailModal({ promotion, isOpen, onClose }: PromotionDe
             </div>
             <div>
               <p className="text-xs text-slate-400">Você economiza</p>
-              <p className="text-xl font-bold text-blue-400">R$ {savings.toFixed(2)}</p>
+              <p className="text-xl font-bold text-blue-400">R$ {formatCurrency(savings)}</p>
             </div>
           </div>
 
@@ -97,7 +90,7 @@ export function PromotionDetailModal({ promotion, isOpen, onClose }: PromotionDe
             <div className="flex items-center gap-3 text-sm">
               <Calendar size={16} className="text-slate-400" />
               <span className="text-slate-400">Válido até:</span>
-              <span className="text-slate-200 font-semibold">{formatDate(promotion.validUntil)}</span>
+              <span className="text-slate-200 font-semibold">{formatDateLong(promotion.validUntil)}</span>
             </div>
             
             <div className="flex items-center gap-3 text-sm">

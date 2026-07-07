@@ -1,30 +1,54 @@
 import logging
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Header, status
-from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
+import secrets
 
-from app.api.deps import get_db, get_current_customer
-from app.core.config import settings
-from app.core.push import send_push_to_customer
-from app.models import Customer, PushSubscription
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_current_customer, get_db
+from app.core.config import Settings, get_settings, settings
+from app.core.limiter import limiter
+from app.core.security import create_admin_token, decode_admin_token
+from app.models import Customer
 from app.schemas.push import (
-    PushSubscribeRequest,
-    PushSendRequest,
+    AdminLoginRequest,
+    AdminLoginResponse,
+    CustomerSearchResult,
     PushBroadcastRequest,
+    PushBulkSendRequest,
+    PushCampaignResponse,
     PushPublicKeyResponse,
+    PushSendRequest,
+    PushSubscribeRequest,
 )
+from app.services import push_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/push", tags=["push"])
 
 
-def _verify_admin(x_admin_secret: Optional[str] = Header(None)) -> None:
-    if x_admin_secret != settings.PUSH_ADMIN_SECRET:
+def _verify_admin(
+    authorization: str | None = Header(None),
+    x_admin_secret: str | None = Header(None),
+    current_settings: Settings = Depends(get_settings),
+) -> None:
+    """Aceita duas formas de autenticação admin: um Bearer token de sessão (obtido em
+    /push/admin/login, o caminho recomendado pro painel — não guarda o secret
+    permanente no navegador) ou o header X-Admin-Secret direto (mantido pra scripts/
+    chamadas simples e para não quebrar integrações existentes)."""
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.removeprefix("Bearer ").strip()
+        if decode_admin_token(token):
+            return
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado")
+
+    if x_admin_secret and secrets.compare_digest(x_admin_secret, current_settings.PUSH_ADMIN_SECRET):
+        return
+
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado")
 
 
 # ── Endpoints do cliente (requerem JWT) ────────────────────────────────────
+
 
 @router.get("/vapid-public-key", response_model=PushPublicKeyResponse)
 def get_vapid_public_key():
@@ -39,30 +63,15 @@ def subscribe(
     db: Session = Depends(get_db),
 ):
     """Registra ou atualiza a PushSubscription do dispositivo."""
-    existing = db.query(PushSubscription).filter(PushSubscription.endpoint == data.endpoint).first()
-
-    if existing:
-        existing.p256dh = data.p256dh
-        existing.auth = data.auth
-        db.commit()
-        return {"message": "Subscription atualizada", "id": str(existing.id)}
-
-    sub = PushSubscription(
-        customer_id=current_customer.id,
-        endpoint=data.endpoint,
-        p256dh=data.p256dh,
-        auth=data.auth,
-        user_agent=data.user_agent,
-    )
     try:
-        db.add(sub)
-        db.commit()
-        db.refresh(sub)
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(status_code=400, detail="Subscription já registrada")
+        sub, created = push_service.subscribe(
+            db, current_customer.id, data.endpoint, data.p256dh, data.auth, data.user_agent
+        )
+    except push_service.SubscriptionConflictError as e:
+        raise HTTPException(status_code=400, detail="Subscription já registrada") from e
 
-    return {"message": "Subscription registrada", "id": str(sub.id)}
+    message = "Subscription registrada" if created else "Subscription atualizada"
+    return {"message": message, "id": str(sub.id)}
 
 
 @router.delete("/unsubscribe")
@@ -71,41 +80,59 @@ def unsubscribe(
     db: Session = Depends(get_db),
 ):
     """Remove todas as subscriptions do cliente autenticado."""
-    deleted = db.query(PushSubscription).filter(
-        PushSubscription.customer_id == current_customer.id
-    ).delete()
-    db.commit()
+    deleted = push_service.unsubscribe(db, current_customer.id)
     return {"message": f"{deleted} subscription(s) removida(s)"}
 
 
-# ── Endpoints admin (requerem X-Admin-Secret no header) ────────────────────
+# ── Login do painel admin ───────────────────────────────────────────────────
+
+
+@router.post("/admin/login", response_model=AdminLoginResponse)
+@limiter.limit("5/minute")
+def admin_login(request: Request, data: AdminLoginRequest, current_settings: Settings = Depends(get_settings)):
+    """Troca o PUSH_ADMIN_SECRET por um token de sessão de curta duração — o painel
+    guarda esse token no navegador, não o secret permanente."""
+    if not secrets.compare_digest(data.secret, current_settings.PUSH_ADMIN_SECRET):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado")
+    return {"token": create_admin_token()}
+
+
+# ── Endpoints admin (requerem Bearer token ou X-Admin-Secret) ──────────────
+
+
+@router.get("/admin/customers", response_model=list[CustomerSearchResult], dependencies=[Depends(_verify_admin)])
+def admin_search_customers(search: str = "", db: Session = Depends(get_db)):
+    """Busca clientes por nome/email/ID pro painel admin escolher destinatários."""
+    return push_service.search_customers(db, search)
+
+
+@router.get("/admin/campaigns", response_model=list[PushCampaignResponse], dependencies=[Depends(_verify_admin)])
+def admin_list_campaigns(limit: int = 20, db: Session = Depends(get_db)):
+    """Histórico de envios feitos pelo painel admin (individual, seleção ou broadcast)."""
+    return push_service.list_campaigns(db, limit)
+
 
 @router.post("/send", dependencies=[Depends(_verify_admin)])
-def send_push_manual(data: PushSendRequest, db: Session = Depends(get_db)):
-    """Envia push para um cliente específico. Uso: testes e comunicação pontual."""
-    result = send_push_to_customer(
-        customer_id=data.customer_id,
-        title=data.title,
-        message=data.message,
-        url=data.url,
-        db=db,
-    )
+@limiter.limit("10/minute")
+def send_push_manual(request: Request, data: PushSendRequest, db: Session = Depends(get_db)):
+    """Envia push para um cliente específico e registra a notificação in-app."""
+    customer = db.query(Customer).filter(Customer.id == data.customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente não encontrado")
+
+    result = push_service.send_to_customer(db, customer.id, data.title, data.message, data.url)
     return {"message": "Push enviado", **result}
 
 
+@router.post("/send-bulk", dependencies=[Depends(_verify_admin)])
+@limiter.limit("10/minute")
+def send_push_bulk(request: Request, data: PushBulkSendRequest, db: Session = Depends(get_db)):
+    """Envia push e registra notificação in-app pra uma lista específica de clientes."""
+    return push_service.send_to_customers(db, data.customer_ids, data.title, data.message, data.url)
+
+
 @router.post("/broadcast", dependencies=[Depends(_verify_admin)])
-def broadcast(data: PushBroadcastRequest, db: Session = Depends(get_db)):
-    """Envia push para todos os clientes com subscription ativa."""
-    customer_ids = list({
-        sub.customer_id
-        for sub in db.query(PushSubscription.customer_id).all()
-    })
-
-    total = {"sent": 0, "failed": 0, "removed": 0}
-    for cid in customer_ids:
-        r = send_push_to_customer(cid, data.title, data.message, data.url, db)
-        total["sent"] += r["sent"]
-        total["failed"] += r["failed"]
-        total["removed"] += r["removed"]
-
-    return {"customers_targeted": len(customer_ids), **total}
+@limiter.limit("10/minute")
+def broadcast(request: Request, data: PushBroadcastRequest, db: Session = Depends(get_db)):
+    """Envia push e registra notificação in-app para todos os clientes com subscription ativa."""
+    return push_service.broadcast(db, data.title, data.message, data.url)
