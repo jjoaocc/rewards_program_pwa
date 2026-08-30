@@ -23,9 +23,10 @@ export function AddressSection({ customer, editedCustomer, isEditing, onChange }
       <div className="space-y-4">
         {/* CEP */}
         <div>
-          <label className="text-xs text-slate-400 font-medium mb-1.5 block">CEP</label>
+          <label htmlFor="address-cep" className="text-xs text-slate-400 font-medium mb-1.5 block">CEP</label>
           {isEditing ? (
             <input
+              id="address-cep"
               type="text"
               inputMode="numeric"
               value={editedCustomer.address.cep}
@@ -42,9 +43,10 @@ export function AddressSection({ customer, editedCustomer, isEditing, onChange }
         {/* Rua e Número */}
         <div className="grid grid-cols-3 gap-3">
           <div className="col-span-2">
-            <label className="text-xs text-slate-400 font-medium mb-1.5 block">Rua</label>
+            <label htmlFor="address-street" className="text-xs text-slate-400 font-medium mb-1.5 block">Rua</label>
             {isEditing ? (
               <input
+                id="address-street"
                 type="text"
                 value={editedCustomer.address.street}
                 onChange={(e) => onChange({ street: e.target.value })}
@@ -55,9 +57,10 @@ export function AddressSection({ customer, editedCustomer, isEditing, onChange }
             )}
           </div>
           <div>
-            <label className="text-xs text-slate-400 font-medium mb-1.5 block">Número</label>
+            <label htmlFor="address-number" className="text-xs text-slate-400 font-medium mb-1.5 block">Número</label>
             {isEditing ? (
               <input
+                id="address-number"
                 type="text"
                 inputMode="numeric"
                 value={editedCustomer.address.number}
@@ -73,9 +76,10 @@ export function AddressSection({ customer, editedCustomer, isEditing, onChange }
 
         {/* Complemento */}
         <div>
-          <label className="text-xs text-slate-400 font-medium mb-1.5 block">Complemento (opcional)</label>
+          <label htmlFor="address-complement" className="text-xs text-slate-400 font-medium mb-1.5 block">Complemento (opcional)</label>
           {isEditing ? (
             <input
+              id="address-complement"
               type="text"
               value={editedCustomer.address.complement || ''}
               onChange={(e) => onChange({ complement: e.target.value })}
@@ -89,9 +93,10 @@ export function AddressSection({ customer, editedCustomer, isEditing, onChange }
 
         {/* Bairro */}
         <div>
-          <label className="text-xs text-slate-400 font-medium mb-1.5 block">Bairro</label>
+          <label htmlFor="address-neighborhood" className="text-xs text-slate-400 font-medium mb-1.5 block">Bairro</label>
           {isEditing ? (
             <input
+              id="address-neighborhood"
               type="text"
               value={editedCustomer.address.neighborhood}
               onChange={(e) => onChange({ neighborhood: e.target.value })}
@@ -105,9 +110,10 @@ export function AddressSection({ customer, editedCustomer, isEditing, onChange }
         {/* Cidade e UF */}
         <div className="grid grid-cols-3 gap-3">
           <div className="col-span-2">
-            <label className="text-xs text-slate-400 font-medium mb-1.5 block">Cidade</label>
+            <label htmlFor="address-city" className="text-xs text-slate-400 font-medium mb-1.5 block">Cidade</label>
             {isEditing ? (
               <input
+                id="address-city"
                 type="text"
                 value={editedCustomer.address.city}
                 onChange={(e) => onChange({ city: e.target.value })}
@@ -118,9 +124,10 @@ export function AddressSection({ customer, editedCustomer, isEditing, onChange }
             )}
           </div>
           <div>
-            <label className="text-xs text-slate-400 font-medium mb-1.5 block">UF</label>
+            <label htmlFor="address-state" className="text-xs text-slate-400 font-medium mb-1.5 block">UF</label>
             {isEditing ? (
               <select
+                id="address-state"
                 value={editedCustomer.address.state}
                 onChange={(e) => onChange({ state: e.target.value })}
                 className="w-full bg-slate-700 border border-slate-600 text-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-smooth"
