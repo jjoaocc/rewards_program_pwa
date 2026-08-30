@@ -9,3 +9,8 @@ faker==33.1.0
 
 # Lint/format
 ruff==0.8.6
+
+# Types/security
+mypy==1.14.1
+bandit==1.8.0
+pip-audit==2.7.3

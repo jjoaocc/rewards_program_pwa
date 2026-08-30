@@ -12,7 +12,7 @@ class EmailAlreadyInUseError(Exception):
 
 def build_customer_response(customer: Customer, db: Session) -> dict:
     """Monta o dict de resposta incluindo endereço primário."""
-    address = db.query(Address).filter(Address.customer_id == customer.id, Address.is_primary).first()
+    address = db.query(Address).filter(Address.customer_id == customer.id, Address.is_primary.is_(True)).first()
 
     address_data = None
     if address:

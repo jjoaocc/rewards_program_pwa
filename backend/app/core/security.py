@@ -41,7 +41,9 @@ def decode_access_token(token: str) -> str | None:
     """Decodifica token JWT e retorna customer_id"""
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        customer_id: str = payload.get("sub")
+        customer_id = payload.get("sub")
+        if not isinstance(customer_id, str):
+            return None
         return customer_id
     except InvalidTokenError:
         return None

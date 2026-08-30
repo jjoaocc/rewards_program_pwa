@@ -10,7 +10,7 @@ def list_events(db: Session, *, active_only: bool = True, current_only: bool = F
     query = db.query(Event)
 
     if active_only:
-        query = query.filter(Event.active)
+        query = query.filter(Event.active.is_(True))
 
     if current_only:
         today = date.today()

@@ -22,4 +22,4 @@ pywebpush==2.0.0
 slowapi==0.1.9
 
 # Utils
-python-dotenv==1.0.1
+python-dotenv==1.2.2

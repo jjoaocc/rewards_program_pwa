@@ -17,7 +17,9 @@ app = FastAPI(
 )
 
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+# slowapi tipa o handler pra RateLimitExceeded especificamente, mas o stub do Starlette
+# espera um Callable genérico para Exception; mismatch conhecido entre as duas libs, não é bug.
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
 app.add_middleware(SecurityHeadersMiddleware)
 

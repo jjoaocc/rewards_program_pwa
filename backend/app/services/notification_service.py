@@ -84,7 +84,7 @@ def build_notifications(
     type: str = "system",
     action_url: str | None = None,
 ) -> list[Notification]:
-    """Monta (sem persistir) uma notificação idêntica pra vários clientes — deixa o
+    """Monta (sem persistir) uma notificação idêntica pra vários clientes, deixa o
     caller decidir quando commitar, pra poder agrupar com outros objetos num único
     commit (ex: o registro de campanha do push admin)."""
     return [

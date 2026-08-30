@@ -1,8 +1,9 @@
-// src/App.tsx — substitui o arquivo inteiro
+// src/App.tsx, substitui o arquivo inteiro
 
 import { useState, useMemo } from 'react';
 import { Home, Receipt, Calendar, UserCircle } from 'lucide-react';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { AuthProvider } from './contexts/AuthProvider';
+import { useAuth } from './contexts/AuthContext';
 import { useCustomer } from './hooks/useCustomer';
 import { useTransactions } from './hooks/useTransactions';
 import { useStats } from './hooks/useStats';

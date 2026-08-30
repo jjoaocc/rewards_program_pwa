@@ -18,7 +18,7 @@ def list_products(
     query = db.query(Product)
 
     if active_only:
-        query = query.filter(Product.active)
+        query = query.filter(Product.active.is_(True))
 
     if in_stock:
         query = query.filter(Product.stock > 0)

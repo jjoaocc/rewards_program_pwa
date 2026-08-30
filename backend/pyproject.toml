@@ -12,3 +12,22 @@ ignore = ["B008"]  # Depends(...) em default de argumento é o padrão idiomáti
 
 [tool.ruff.format]
 quote-style = "double"
+
+[tool.mypy]
+plugins = ["pydantic.mypy", "sqlalchemy.ext.mypy.plugin"]
+python_version = "3.12"
+warn_unused_ignores = true
+warn_redundant_casts = true
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = "pywebpush.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "slowapi.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "testcontainers.*"
+ignore_missing_imports = true

@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  backend-ci:
+    name: Backend, lint, tipos, seguranca e testes
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Ruff
+        run: ruff check .
+
+      - name: Mypy
+        run: mypy app/
+
+      - name: Bandit (seguranca estatica)
+        run: bandit -q -r app/
+
+      - name: pip-audit (CVE em dependencias)
+        run: pip-audit -r requirements.txt
+
+      - name: Pytest
+        run: pytest tests/ -v --cov=app --cov-report=term-missing
+
+  frontend-ci:
+    name: Frontend, lint, tipos, testes e build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Testes
+        run: npm test
+
+      - name: Build (inclui checagem de tipos via tsc -b)
+        run: npm run build
+
+  deploy:
+    name: Deploy (VPS)
+    needs: [backend-ci, frontend-ci]
+    runs-on: [self-hosted, vps]
+
+    steps:
+      - name: Git pull + rebuild
+        run: |
+          cd /opt/containers/rewards
+          git pull origin main
+          docker compose build --no-cache
+          docker compose up -d
+
+      # NPM (Nginx Proxy Manager) resolve o hostname rewards_backend uma vez e
+      # cacheia o IP Docker; o container ganha IP novo a cada recreate, o que
+      # causa 502 ate o nginx do NPM recarregar.
+      - name: Reload do Nginx Proxy Manager
+        run: docker exec nginx-proxy-manager nginx -s reload
+
+      - name: Checagem de saude pos-deploy
+        run: |
+          for i in $(seq 1 15); do
+            sleep 4
+            if curl -sf -o /dev/null https://api.strokes.dev.br/rewards/health && \
+               curl -sf -o /dev/null https://rewards.strokes.dev.br/; then
+              echo "OK: backend e frontend respondendo apos o deploy."
+              exit 0
+            fi
+          done
+          echo "FALHA: backend/frontend nao responderam apos o deploy. Logs recentes:"
+          docker compose -f /opt/containers/rewards/docker-compose.yml logs --tail=80
+          exit 1
+
+      - name: Limpar imagens Docker orfas
+        if: always()
+        run: docker image prune -f
