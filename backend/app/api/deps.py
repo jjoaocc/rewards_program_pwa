@@ -4,9 +4,11 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from app.adapters.db.product_repository import SqlAlchemyProductRepository
 from app.core.database import SessionLocal
 from app.core.security import decode_access_token
 from app.models import Customer
+from app.ports.product_repository import ProductRepository
 
 # Bearer token scheme
 security = HTTPBearer()
@@ -19,6 +21,10 @@ def get_db() -> Generator:
         yield db
     finally:
         db.close()
+
+
+def get_product_repository(db: Session = Depends(get_db)) -> ProductRepository:
+    return SqlAlchemyProductRepository(db)
 
 
 def get_current_customer(
