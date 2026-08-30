@@ -2,13 +2,23 @@ from sqlalchemy import desc
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.adapters.db.notification_repository import SqlAlchemyNotificationRepository
 from app.core.push import WebPushSender, _pywebpush_sender, send_push_to_subscriptions
-from app.models import Customer, PushCampaign, PushSubscription
-from app.services import notification_service
+from app.models import Customer, Notification, PushCampaign, PushSubscription
 
 
 class SubscriptionConflictError(Exception):
     """Mesma subscription registrada em paralelo por outra requisição concorrente."""
+
+
+def _build_notifications(customer_ids: list[str], title: str, message: str, *, url: str) -> list[Notification]:
+    """Monta (sem persistir) uma notificação idêntica pra vários clientes, deixa o
+    caller decidir quando commitar, pra poder agrupar com outros objetos num único
+    commit (ex: o registro de campanha do push admin)."""
+    return [
+        Notification(customer_id=customer_id, title=title, message=message, type="system", action_url=url)
+        for customer_id in customer_ids
+    ]
 
 
 def subscribe(
@@ -74,7 +84,7 @@ def send_to_customer(
     url: str,
     sender: WebPushSender = _pywebpush_sender,
 ) -> dict:
-    notification_service.create_notification(db, customer_id, title, message, action_url=url)
+    SqlAlchemyNotificationRepository(db).create(customer_id, title, message, action_url=url)
 
     campaign = PushCampaign(
         title=title,
@@ -106,7 +116,7 @@ def send_to_customers(
     existing_ids = [c.id for c in db.query(Customer.id).filter(Customer.id.in_(customer_ids)).all()]
     not_found = [cid for cid in customer_ids if cid not in existing_ids]
 
-    notifications = notification_service.build_notifications(existing_ids, title, message, action_url=url)
+    notifications = _build_notifications(existing_ids, title, message, url=url)
     campaign = PushCampaign(
         title=title,
         message=message,
@@ -142,7 +152,7 @@ def broadcast(
     subs = db.query(PushSubscription).all()
     customer_ids = list({sub.customer_id for sub in subs})
 
-    notifications = notification_service.build_notifications(customer_ids, title, message, action_url=url)
+    notifications = _build_notifications(customer_ids, title, message, url=url)
     campaign = PushCampaign(
         title=title,
         message=message,
