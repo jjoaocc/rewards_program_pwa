@@ -1,7 +1,6 @@
-from sqlalchemy.orm import Session
-
 from app.core.security import verify_password
-from app.models import Customer
+from app.domain.customer import Customer
+from app.ports.customer_repository import CustomerRepository
 
 
 class InvalidCredentialsError(Exception):
@@ -12,8 +11,8 @@ class InactiveAccountError(Exception):
     """Cliente existe e a senha bate, mas a conta está inativa."""
 
 
-def authenticate_customer(db: Session, identifier: str, password: str) -> Customer:
-    customer = db.query(Customer).filter((Customer.email == identifier) | (Customer.id == identifier)).first()
+def authenticate_customer(repo: CustomerRepository, identifier: str, password: str) -> Customer:
+    customer = repo.get_by_identifier(identifier)
 
     if not customer or not verify_password(password, customer.password_hash):
         raise InvalidCredentialsError()

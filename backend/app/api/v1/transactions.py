@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_customer, get_db
 from app.core.pagination import MAX_PAGE_SIZE
-from app.models import Customer
+from app.domain.customer import Customer
 from app.schemas.transaction import TransactionResponse
 from app.services import transaction_service
 

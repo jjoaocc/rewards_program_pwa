@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_customer, get_db
-from app.models import Customer
+from app.domain.customer import Customer
 from app.schemas import NotificationMarkRead, NotificationResponse
 from app.services import notification_service
 

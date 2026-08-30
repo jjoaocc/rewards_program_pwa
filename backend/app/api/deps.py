@@ -4,10 +4,14 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from app.adapters.db.customer_repository import SqlAlchemyCustomerRepository
+from app.adapters.db.event_repository import SqlAlchemyEventRepository
 from app.adapters.db.product_repository import SqlAlchemyProductRepository
 from app.core.database import SessionLocal
 from app.core.security import decode_access_token
-from app.models import Customer
+from app.domain.customer import Customer
+from app.ports.customer_repository import CustomerRepository
+from app.ports.event_repository import EventRepository
 from app.ports.product_repository import ProductRepository
 
 # Bearer token scheme
@@ -27,8 +31,17 @@ def get_product_repository(db: Session = Depends(get_db)) -> ProductRepository:
     return SqlAlchemyProductRepository(db)
 
 
+def get_event_repository(db: Session = Depends(get_db)) -> EventRepository:
+    return SqlAlchemyEventRepository(db)
+
+
+def get_customer_repository(db: Session = Depends(get_db)) -> CustomerRepository:
+    return SqlAlchemyCustomerRepository(db)
+
+
 def get_current_customer(
-    credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    repo: CustomerRepository = Depends(get_customer_repository),
 ) -> Customer:
     """Dependency para obter cliente autenticado via JWT"""
 
@@ -48,7 +61,7 @@ def get_current_customer(
         raise credentials_exception
 
     # Buscar cliente no banco
-    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    customer = repo.get_by_id(customer_id)
 
     if customer is None:
         raise credentials_exception

@@ -8,7 +8,8 @@ from app.api.deps import get_current_customer, get_db
 from app.core.config import Settings, get_settings, settings
 from app.core.limiter import limiter
 from app.core.security import create_admin_token, decode_admin_token
-from app.models import Customer
+from app.domain.customer import Customer
+from app.models import Customer as CustomerModel
 from app.schemas.push import (
     AdminLoginRequest,
     AdminLoginResponse,
@@ -116,7 +117,7 @@ def admin_list_campaigns(limit: int = 20, db: Session = Depends(get_db)):
 @limiter.limit("10/minute")
 def send_push_manual(request: Request, data: PushSendRequest, db: Session = Depends(get_db)):
     """Envia push para um cliente específico e registra a notificação in-app."""
-    customer = db.query(Customer).filter(Customer.id == data.customer_id).first()
+    customer = db.query(CustomerModel).filter(CustomerModel.id == data.customer_id).first()
     if not customer:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente não encontrado")
 
