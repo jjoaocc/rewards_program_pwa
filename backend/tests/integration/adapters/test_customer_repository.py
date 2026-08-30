@@ -101,3 +101,32 @@ def test_get_stats_sums_transactions_against_real_postgres(db_session):
     assert stats.total_earned == Decimal("50.00")
     assert stats.total_redeemed == Decimal("20.00")
     assert stats.transaction_count == 2
+
+
+def test_search_matches_by_name_email_or_id(db_session):
+    _make_customer(db_session, id="C0001", email="furadeira@example.com", name="Cliente A")
+    _make_customer(db_session, id="C0002", email="b@example.com", name="Cliente B", document="99999999999")
+    repo = SqlAlchemyCustomerRepository(db_session)
+
+    result = repo.search("furadeira", limit=20)
+
+    assert [c.id for c in result] == ["C0001"]
+
+
+def test_search_without_query_returns_all_ordered_by_name(db_session):
+    _make_customer(db_session, id="C0002", email="b@example.com", name="Zeca", document="99999999999")
+    _make_customer(db_session, id="C0001", email="a@example.com", name="Ana")
+    repo = SqlAlchemyCustomerRepository(db_session)
+
+    result = repo.search("", limit=20)
+
+    assert [c.name for c in result] == ["Ana", "Zeca"]
+
+
+def test_filter_existing_ids_drops_unknown_ids(db_session):
+    _make_customer(db_session, id="C0001")
+    repo = SqlAlchemyCustomerRepository(db_session)
+
+    result = repo.filter_existing_ids(["C0001", "C9999"])
+
+    assert result == ["C0001"]

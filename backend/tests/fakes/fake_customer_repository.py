@@ -46,3 +46,13 @@ class FakeCustomerRepository:
             transaction_count=len(entries),
             member_since=member_since,
         )
+
+    def search(self, query: str, limit: int) -> list[Customer]:
+        results = list(self._customers.values())
+        if query:
+            q = query.lower()
+            results = [c for c in results if q in c.name.lower() or q in c.email.lower() or q in c.id.lower()]
+        return sorted(results, key=lambda c: c.name)[:limit]
+
+    def filter_existing_ids(self, customer_ids: list[str]) -> list[str]:
+        return [cid for cid in customer_ids if cid in self._customers]

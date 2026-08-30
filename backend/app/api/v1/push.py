@@ -1,15 +1,26 @@
-import logging
 import secrets
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_customer, get_db
+from app.api.deps import (
+    get_current_customer,
+    get_customer_repository,
+    get_db,
+    get_notification_repository,
+    get_push_campaign_repository,
+    get_push_subscription_repository,
+)
+from app.application import push_use_cases
 from app.core.config import Settings, get_settings, settings
 from app.core.limiter import limiter
 from app.core.security import create_admin_token, decode_admin_token
 from app.domain.customer import Customer
-from app.models import Customer as CustomerModel
+from app.domain.push import SubscriptionConflictError
+from app.ports.customer_repository import CustomerRepository
+from app.ports.notification_repository import NotificationRepository
+from app.ports.push_campaign_repository import PushCampaignRepository
+from app.ports.push_subscription_repository import PushSubscriptionRepository
 from app.schemas.push import (
     AdminLoginRequest,
     AdminLoginResponse,
@@ -21,9 +32,7 @@ from app.schemas.push import (
     PushSendRequest,
     PushSubscribeRequest,
 )
-from app.services import push_service
 
-logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/push", tags=["push"])
 
 
@@ -61,14 +70,14 @@ def get_vapid_public_key():
 def subscribe(
     data: PushSubscribeRequest,
     current_customer: Customer = Depends(get_current_customer),
-    db: Session = Depends(get_db),
+    repo: PushSubscriptionRepository = Depends(get_push_subscription_repository),
 ):
     """Registra ou atualiza a PushSubscription do dispositivo."""
     try:
-        sub, created = push_service.subscribe(
-            db, current_customer.id, data.endpoint, data.p256dh, data.auth, data.user_agent
+        sub, created = push_use_cases.subscribe(
+            repo, current_customer.id, data.endpoint, data.p256dh, data.auth, data.user_agent
         )
-    except push_service.SubscriptionConflictError as e:
+    except SubscriptionConflictError as e:
         raise HTTPException(status_code=400, detail="Subscription já registrada") from e
 
     message = "Subscription registrada" if created else "Subscription atualizada"
@@ -78,10 +87,10 @@ def subscribe(
 @router.delete("/unsubscribe")
 def unsubscribe(
     current_customer: Customer = Depends(get_current_customer),
-    db: Session = Depends(get_db),
+    repo: PushSubscriptionRepository = Depends(get_push_subscription_repository),
 ):
     """Remove todas as subscriptions do cliente autenticado."""
-    deleted = push_service.unsubscribe(db, current_customer.id)
+    deleted = push_use_cases.unsubscribe(repo, current_customer.id)
     return {"message": f"{deleted} subscription(s) removida(s)"}
 
 
@@ -102,38 +111,66 @@ def admin_login(request: Request, data: AdminLoginRequest, current_settings: Set
 
 
 @router.get("/admin/customers", response_model=list[CustomerSearchResult], dependencies=[Depends(_verify_admin)])
-def admin_search_customers(search: str = "", db: Session = Depends(get_db)):
+def admin_search_customers(
+    search: str = "",
+    repo: CustomerRepository = Depends(get_customer_repository),
+):
     """Busca clientes por nome/email/ID pro painel admin escolher destinatários."""
-    return push_service.search_customers(db, search)
+    return push_use_cases.search_customers(repo, search)
 
 
 @router.get("/admin/campaigns", response_model=list[PushCampaignResponse], dependencies=[Depends(_verify_admin)])
-def admin_list_campaigns(limit: int = 20, db: Session = Depends(get_db)):
+def admin_list_campaigns(
+    limit: int = 20,
+    repo: PushCampaignRepository = Depends(get_push_campaign_repository),
+):
     """Histórico de envios feitos pelo painel admin (individual, seleção ou broadcast)."""
-    return push_service.list_campaigns(db, limit)
+    return push_use_cases.list_campaigns(repo, limit)
 
 
 @router.post("/send", dependencies=[Depends(_verify_admin)])
 @limiter.limit("10/minute")
-def send_push_manual(request: Request, data: PushSendRequest, db: Session = Depends(get_db)):
+def send_push_manual(
+    request: Request,
+    data: PushSendRequest,
+    db: Session = Depends(get_db),
+    customer_repo: CustomerRepository = Depends(get_customer_repository),
+    notification_repo: NotificationRepository = Depends(get_notification_repository),
+    campaign_repo: PushCampaignRepository = Depends(get_push_campaign_repository),
+):
     """Envia push para um cliente específico e registra a notificação in-app."""
-    customer = db.query(CustomerModel).filter(CustomerModel.id == data.customer_id).first()
+    customer = customer_repo.get_by_id(data.customer_id)
     if not customer:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente não encontrado")
 
-    result = push_service.send_to_customer(db, customer.id, data.title, data.message, data.url)
+    result = push_use_cases.send_to_customer(
+        db, customer.id, data.title, data.message, data.url, notification_repo, campaign_repo
+    )
     return {"message": "Push enviado", **result}
 
 
 @router.post("/send-bulk", dependencies=[Depends(_verify_admin)])
 @limiter.limit("10/minute")
-def send_push_bulk(request: Request, data: PushBulkSendRequest, db: Session = Depends(get_db)):
+def send_push_bulk(
+    request: Request,
+    data: PushBulkSendRequest,
+    db: Session = Depends(get_db),
+    customer_repo: CustomerRepository = Depends(get_customer_repository),
+    campaign_repo: PushCampaignRepository = Depends(get_push_campaign_repository),
+):
     """Envia push e registra notificação in-app pra uma lista específica de clientes."""
-    return push_service.send_to_customers(db, data.customer_ids, data.title, data.message, data.url)
+    return push_use_cases.send_to_customers(
+        db, data.customer_ids, data.title, data.message, data.url, customer_repo, campaign_repo
+    )
 
 
 @router.post("/broadcast", dependencies=[Depends(_verify_admin)])
 @limiter.limit("10/minute")
-def broadcast(request: Request, data: PushBroadcastRequest, db: Session = Depends(get_db)):
+def broadcast(
+    request: Request,
+    data: PushBroadcastRequest,
+    db: Session = Depends(get_db),
+    campaign_repo: PushCampaignRepository = Depends(get_push_campaign_repository),
+):
     """Envia push e registra notificação in-app para todos os clientes com subscription ativa."""
-    return push_service.broadcast(db, data.title, data.message, data.url)
+    return push_use_cases.broadcast(db, data.title, data.message, data.url, campaign_repo)

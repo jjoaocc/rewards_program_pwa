@@ -8,6 +8,8 @@ from app.adapters.db.customer_repository import SqlAlchemyCustomerRepository
 from app.adapters.db.event_repository import SqlAlchemyEventRepository
 from app.adapters.db.notification_repository import SqlAlchemyNotificationRepository
 from app.adapters.db.product_repository import SqlAlchemyProductRepository
+from app.adapters.db.push_campaign_repository import SqlAlchemyPushCampaignRepository
+from app.adapters.db.push_subscription_repository import SqlAlchemyPushSubscriptionRepository
 from app.adapters.db.transaction_repository import SqlAlchemyTransactionRepository
 from app.core.database import SessionLocal
 from app.core.security import decode_access_token
@@ -16,6 +18,8 @@ from app.ports.customer_repository import CustomerRepository
 from app.ports.event_repository import EventRepository
 from app.ports.notification_repository import NotificationRepository
 from app.ports.product_repository import ProductRepository
+from app.ports.push_campaign_repository import PushCampaignRepository
+from app.ports.push_subscription_repository import PushSubscriptionRepository
 from app.ports.transaction_repository import TransactionRepository
 
 # Bearer token scheme
@@ -49,6 +53,14 @@ def get_transaction_repository(db: Session = Depends(get_db)) -> TransactionRepo
 
 def get_notification_repository(db: Session = Depends(get_db)) -> NotificationRepository:
     return SqlAlchemyNotificationRepository(db)
+
+
+def get_push_subscription_repository(db: Session = Depends(get_db)) -> PushSubscriptionRepository:
+    return SqlAlchemyPushSubscriptionRepository(db)
+
+
+def get_push_campaign_repository(db: Session = Depends(get_db)) -> PushCampaignRepository:
+    return SqlAlchemyPushCampaignRepository(db)
 
 
 def get_current_customer(

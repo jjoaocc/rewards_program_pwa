@@ -109,3 +109,17 @@ class SqlAlchemyCustomerRepository:
             transaction_count=transaction_count,
             member_since=member_since,
         )
+
+    def search(self, query: str, limit: int) -> list[Customer]:
+        db_query = self._db.query(CustomerModel)
+        if query:
+            pattern = f"%{query}%"
+            db_query = db_query.filter(
+                CustomerModel.name.ilike(pattern) | CustomerModel.email.ilike(pattern) | CustomerModel.id.ilike(pattern)
+            )
+        rows = db_query.order_by(CustomerModel.name).limit(limit).all()
+        return [_to_domain(row) for row in rows]
+
+    def filter_existing_ids(self, customer_ids: list[str]) -> list[str]:
+        rows = self._db.query(CustomerModel.id).filter(CustomerModel.id.in_(customer_ids)).all()
+        return [row[0] for row in rows]
