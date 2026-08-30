@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_customer, get_db
+from app.api.deps import get_current_customer, get_transaction_repository
+from app.application import transaction_use_cases
 from app.core.pagination import MAX_PAGE_SIZE
 from app.domain.customer import Customer
+from app.ports.transaction_repository import TransactionRepository
 from app.schemas.transaction import TransactionResponse
-from app.services import transaction_service
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
@@ -15,6 +15,6 @@ def get_my_transactions(
     limit: int = Query(MAX_PAGE_SIZE, ge=1),
     offset: int = Query(0, ge=0),
     current_customer: Customer = Depends(get_current_customer),
-    db: Session = Depends(get_db),
+    repo: TransactionRepository = Depends(get_transaction_repository),
 ):
-    return transaction_service.list_transactions(db, current_customer.id, limit=limit, offset=offset)
+    return transaction_use_cases.list_transactions(repo, current_customer.id, limit=limit, offset=offset)

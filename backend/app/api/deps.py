@@ -7,12 +7,14 @@ from sqlalchemy.orm import Session
 from app.adapters.db.customer_repository import SqlAlchemyCustomerRepository
 from app.adapters.db.event_repository import SqlAlchemyEventRepository
 from app.adapters.db.product_repository import SqlAlchemyProductRepository
+from app.adapters.db.transaction_repository import SqlAlchemyTransactionRepository
 from app.core.database import SessionLocal
 from app.core.security import decode_access_token
 from app.domain.customer import Customer
 from app.ports.customer_repository import CustomerRepository
 from app.ports.event_repository import EventRepository
 from app.ports.product_repository import ProductRepository
+from app.ports.transaction_repository import TransactionRepository
 
 # Bearer token scheme
 security = HTTPBearer()
@@ -37,6 +39,10 @@ def get_event_repository(db: Session = Depends(get_db)) -> EventRepository:
 
 def get_customer_repository(db: Session = Depends(get_db)) -> CustomerRepository:
     return SqlAlchemyCustomerRepository(db)
+
+
+def get_transaction_repository(db: Session = Depends(get_db)) -> TransactionRepository:
+    return SqlAlchemyTransactionRepository(db)
 
 
 def get_current_customer(
