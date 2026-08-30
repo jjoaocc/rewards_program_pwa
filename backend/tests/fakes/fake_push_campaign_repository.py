@@ -1,13 +1,18 @@
 import dataclasses
 import uuid
 from datetime import datetime
+from typing import Any
 
 from app.domain.push import PushCampaign
 
 
 class FakePushCampaignRepository:
-    def __init__(self, campaigns: list[PushCampaign] | None = None) -> None:
+    def __init__(self, campaigns: list[PushCampaign] | None = None, notification_repo: Any = None) -> None:
         self._campaigns = {c.id: c for c in (campaigns or [])}
+        # Opcional: quando informado, create_and_notify() também cria as notificações
+        # ali (só pra permitir asserção nos testes; em produção isso é 1 commit só,
+        # aqui não tem transação de verdade pra coordenar).
+        self._notification_repo = notification_repo
 
     def create(
         self,
@@ -33,6 +38,29 @@ class FakePushCampaignRepository:
             created_at=datetime.now(),
         )
         self._campaigns[campaign.id] = campaign
+        return campaign
+
+    def create_and_notify(
+        self,
+        title: str,
+        message: str,
+        url: str,
+        *,
+        target_type: str,
+        target_customer_ids: str | None,
+        customer_ids_to_notify: list[str],
+    ) -> PushCampaign:
+        campaign = self.create(
+            title,
+            message,
+            url,
+            target_type=target_type,
+            target_customer_ids=target_customer_ids,
+            customers_targeted=len(customer_ids_to_notify),
+        )
+        if self._notification_repo is not None:
+            for customer_id in customer_ids_to_notify:
+                self._notification_repo.create(customer_id, title, message, action_url=url)
         return campaign
 
     def record_result(self, campaign_id: uuid.UUID, sent: int, failed: int, removed: int) -> None:

@@ -1,6 +1,11 @@
+from types import SimpleNamespace
+
+from pywebpush import WebPushException
+
 from app.adapters.db.customer_repository import SqlAlchemyCustomerRepository
 from app.adapters.db.notification_repository import SqlAlchemyNotificationRepository
 from app.adapters.db.push_campaign_repository import SqlAlchemyPushCampaignRepository
+from app.adapters.db.push_subscription_repository import SqlAlchemyPushSubscriptionRepository
 from app.application.push_use_cases import broadcast, send_to_customer, send_to_customers
 from app.models import Customer, Notification, PushSubscription
 
@@ -29,11 +34,12 @@ def test_send_to_customer_creates_notification_and_campaign(db_session):
     customer = _make_customer(db_session)
     db_session.add(PushSubscription(customer_id=customer.id, endpoint="https://a", p256dh="p", auth="a"))
     db_session.commit()
+    sub_repo = SqlAlchemyPushSubscriptionRepository(db_session)
     notification_repo = SqlAlchemyNotificationRepository(db_session)
     campaign_repo = SqlAlchemyPushCampaignRepository(db_session)
 
     result = send_to_customer(
-        db_session, customer.id, "Título", "Mensagem", "/", notification_repo, campaign_repo, sender=_fake_sender
+        customer.id, "Título", "Mensagem", "/", sub_repo, notification_repo, campaign_repo, sender=_fake_sender
     )
 
     assert result == {"sent": 1, "failed": 0, "removed": 0}
@@ -48,10 +54,11 @@ def test_send_to_customer_creates_notification_and_campaign(db_session):
 def test_send_to_customers_reports_ids_that_do_not_exist(db_session):
     customer = _make_customer(db_session)
     customer_repo = SqlAlchemyCustomerRepository(db_session)
+    sub_repo = SqlAlchemyPushSubscriptionRepository(db_session)
     campaign_repo = SqlAlchemyPushCampaignRepository(db_session)
 
     result = send_to_customers(
-        db_session, [customer.id, "nao-existe"], "Título", "Mensagem", "/", customer_repo, campaign_repo,
+        [customer.id, "nao-existe"], "Título", "Mensagem", "/", customer_repo, sub_repo, campaign_repo,
         sender=_fake_sender,
     )
 
@@ -67,6 +74,7 @@ def test_send_to_customers_batches_notifications_and_campaign_in_a_single_commit
         for i in range(3)
     ]
     customer_repo = SqlAlchemyCustomerRepository(db_session)
+    sub_repo = SqlAlchemyPushSubscriptionRepository(db_session)
     campaign_repo = SqlAlchemyPushCampaignRepository(db_session)
 
     commit_calls = []
@@ -79,7 +87,7 @@ def test_send_to_customers_batches_notifications_and_campaign_in_a_single_commit
     monkeypatch.setattr(db_session, "commit", _counting_commit)
 
     send_to_customers(
-        db_session, [c.id for c in customers], "Título", "Mensagem", "/", customer_repo, campaign_repo,
+        [c.id for c in customers], "Título", "Mensagem", "/", customer_repo, sub_repo, campaign_repo,
         sender=_fake_sender,
     )
 
@@ -94,9 +102,10 @@ def test_broadcast_targets_every_customer_with_a_subscription(db_session):
     for c in customers:
         db_session.add(PushSubscription(customer_id=c.id, endpoint=f"https://{c.id}", p256dh="p", auth="a"))
     db_session.commit()
+    sub_repo = SqlAlchemyPushSubscriptionRepository(db_session)
     campaign_repo = SqlAlchemyPushCampaignRepository(db_session)
 
-    result = broadcast(db_session, "Título", "Mensagem", "/", campaign_repo, sender=_fake_sender)
+    result = broadcast("Título", "Mensagem", "/", sub_repo, campaign_repo, sender=_fake_sender)
 
     assert result["customers_targeted"] == 3
     assert result["sent"] == 3
@@ -112,6 +121,7 @@ def test_broadcast_batches_notifications_and_campaign_in_a_single_commit(db_sess
     for c in customers:
         db_session.add(PushSubscription(customer_id=c.id, endpoint=f"https://{c.id}", p256dh="p", auth="a"))
     db_session.commit()
+    sub_repo = SqlAlchemyPushSubscriptionRepository(db_session)
     campaign_repo = SqlAlchemyPushCampaignRepository(db_session)
 
     commit_calls = []
@@ -123,6 +133,23 @@ def test_broadcast_batches_notifications_and_campaign_in_a_single_commit(db_sess
 
     monkeypatch.setattr(db_session, "commit", _counting_commit)
 
-    broadcast(db_session, "Título", "Mensagem", "/", campaign_repo, sender=_fake_sender)
+    broadcast("Título", "Mensagem", "/", sub_repo, campaign_repo, sender=_fake_sender)
 
     assert len(commit_calls) == 2
+
+
+def test_broadcast_removes_expired_subscriptions(db_session):
+    customer = _make_customer(db_session)
+    sub = PushSubscription(customer_id=customer.id, endpoint="https://a", p256dh="p", auth="a")
+    db_session.add(sub)
+    db_session.commit()
+    sub_repo = SqlAlchemyPushSubscriptionRepository(db_session)
+    campaign_repo = SqlAlchemyPushCampaignRepository(db_session)
+
+    def _expired_sender(*, subscription_info, data, vapid_private_key, vapid_claims):
+        raise WebPushException("expired", response=SimpleNamespace(status_code=410))
+
+    result = broadcast("Título", "Mensagem", "/", sub_repo, campaign_repo, sender=_expired_sender)
+
+    assert result == {"customers_targeted": 1, "sent": 0, "failed": 0, "removed": 1}
+    assert sub_repo.list_all() == []

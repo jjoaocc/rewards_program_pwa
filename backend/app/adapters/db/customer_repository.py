@@ -58,19 +58,24 @@ class SqlAlchemyCustomerRepository:
         )
         return _to_domain(row) if row else None
 
+    def _primary_address_row(self, customer_id: str) -> AddressModel | None:
+        return (
+            self._db.query(AddressModel)
+            .filter(AddressModel.customer_id == customer_id, AddressModel.is_primary.is_(True))
+            .first()
+        )
+
     def get_profile(self, customer_id: str) -> Customer | None:
         row = self._db.query(CustomerModel).filter(CustomerModel.id == customer_id).first()
         if not row:
             return None
 
-        address_row = (
-            self._db.query(AddressModel)
-            .filter(AddressModel.customer_id == customer_id, AddressModel.is_primary.is_(True))
-            .first()
-        )
-        return _to_domain(row, address_row)
+        return _to_domain(row, self._primary_address_row(customer_id))
 
     def update(self, customer_id: str, update_data: dict) -> Customer:
+        """Retorna o perfil já com endereço (mesmo formato de get_profile()) — o
+        caller (customer_use_cases.update_profile) não precisa refazer a busca do
+        cliente depois, só a chamada aqui já cobre tudo."""
         row = self._db.query(CustomerModel).filter(CustomerModel.id == customer_id).first()
         if row is None:
             raise ValueError(f"customer {customer_id} not found")
@@ -82,7 +87,7 @@ class SqlAlchemyCustomerRepository:
             self._db.rollback()
             raise EmailAlreadyInUseError() from e
         self._db.refresh(row)
-        return _to_domain(row)
+        return _to_domain(row, self._primary_address_row(customer_id))
 
     def get_stats(self, customer_id: str, member_since: datetime) -> CustomerStats:
         total_earned = (

@@ -1,12 +1,10 @@
 import secrets
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
-from sqlalchemy.orm import Session
 
 from app.api.deps import (
     get_current_customer,
     get_customer_repository,
-    get_db,
     get_notification_repository,
     get_push_campaign_repository,
     get_push_subscription_repository,
@@ -133,8 +131,8 @@ def admin_list_campaigns(
 def send_push_manual(
     request: Request,
     data: PushSendRequest,
-    db: Session = Depends(get_db),
     customer_repo: CustomerRepository = Depends(get_customer_repository),
+    subscription_repo: PushSubscriptionRepository = Depends(get_push_subscription_repository),
     notification_repo: NotificationRepository = Depends(get_notification_repository),
     campaign_repo: PushCampaignRepository = Depends(get_push_campaign_repository),
 ):
@@ -144,7 +142,7 @@ def send_push_manual(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente não encontrado")
 
     result = push_use_cases.send_to_customer(
-        db, customer.id, data.title, data.message, data.url, notification_repo, campaign_repo
+        customer.id, data.title, data.message, data.url, subscription_repo, notification_repo, campaign_repo
     )
     return {"message": "Push enviado", **result}
 
@@ -154,13 +152,13 @@ def send_push_manual(
 def send_push_bulk(
     request: Request,
     data: PushBulkSendRequest,
-    db: Session = Depends(get_db),
     customer_repo: CustomerRepository = Depends(get_customer_repository),
+    subscription_repo: PushSubscriptionRepository = Depends(get_push_subscription_repository),
     campaign_repo: PushCampaignRepository = Depends(get_push_campaign_repository),
 ):
     """Envia push e registra notificação in-app pra uma lista específica de clientes."""
     return push_use_cases.send_to_customers(
-        db, data.customer_ids, data.title, data.message, data.url, customer_repo, campaign_repo
+        data.customer_ids, data.title, data.message, data.url, customer_repo, subscription_repo, campaign_repo
     )
 
 
@@ -169,8 +167,8 @@ def send_push_bulk(
 def broadcast(
     request: Request,
     data: PushBroadcastRequest,
-    db: Session = Depends(get_db),
+    subscription_repo: PushSubscriptionRepository = Depends(get_push_subscription_repository),
     campaign_repo: PushCampaignRepository = Depends(get_push_campaign_repository),
 ):
     """Envia push e registra notificação in-app para todos os clientes com subscription ativa."""
-    return push_use_cases.broadcast(db, data.title, data.message, data.url, campaign_repo)
+    return push_use_cases.broadcast(data.title, data.message, data.url, subscription_repo, campaign_repo)

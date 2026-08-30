@@ -2,7 +2,7 @@ import dataclasses
 import uuid
 from datetime import datetime
 
-from app.core.pagination import MAX_PAGE_SIZE
+from app.core.pagination import clamp_limit
 from app.domain.notification import Notification
 
 
@@ -17,7 +17,7 @@ class FakeNotificationRepository:
         if unread_only:
             results = [n for n in results if not n.read]
         results = sorted(results, key=lambda n: n.created_at, reverse=True)
-        return results[: min(limit, MAX_PAGE_SIZE)]
+        return results[: clamp_limit(limit)]
 
     def mark_as_read(self, customer_id: str, notification_ids: list[str]) -> list[Notification]:
         updated = []

@@ -1,22 +1,13 @@
 from sqlalchemy.orm import Session
 
+from app.adapters.db.mapping import row_to_domain
 from app.core.pagination import MAX_PAGE_SIZE
 from app.domain.product import Product, ProductFilters
 from app.models import Product as ProductModel
 
 
 def _to_domain(row: ProductModel) -> Product:
-    return Product(
-        id=row.id,
-        name=row.name,
-        description=row.description,
-        points_cost=row.points_cost,
-        category=row.category,
-        stock=row.stock,
-        active=row.active,
-        image_url=row.image_url,
-        created_at=row.created_at,
-    )
+    return row_to_domain(Product, row)
 
 
 class SqlAlchemyProductRepository:

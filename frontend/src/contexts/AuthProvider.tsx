@@ -101,20 +101,19 @@ export function AuthProvider({ children, client = apiClient }: AuthProviderProps
       if (!userData) {
         // Token veio mas /me falhou (situação inesperada)
         removeStoredToken();
-        setIsLoading(false);
         return false;
       }
 
       setUser(userData);
-      setIsLoading(false);
       return true;
 
     } catch (error) {
       if (error instanceof ApiError) {
         console.error(`[Auth] Erro ${error.status}: ${error.message}`);
       }
-      setIsLoading(false);
       return false;
+    } finally {
+      setIsLoading(false);
     }
   };
 

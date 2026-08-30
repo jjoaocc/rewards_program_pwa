@@ -1,12 +1,12 @@
 import json
 import logging
+import uuid
 from typing import Protocol
 
 from pywebpush import WebPushException, webpush
-from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models.push_subscription import PushSubscription
+from app.domain.push import PushSubscription
 
 logger = logging.getLogger(__name__)
 
@@ -71,35 +71,24 @@ def send_push_to_subscriptions(
     title: str,
     message: str,
     url: str,
-    db: Session,
     sender: WebPushSender = _pywebpush_sender,
 ) -> dict:
     """Envia o mesmo push pra uma lista de subscriptions já carregada (usado tanto
-    pra um único cliente quanto pro broadcast, sem re-consultar o banco por cliente)."""
-    sent = failed = removed = 0
+    pra um único cliente quanto pro broadcast, sem re-consultar o banco por cliente).
+
+    Não mexe em banco — devolve `removed_ids` (subscriptions expiradas/revogadas,
+    HTTP 410) pra quem chamou decidir como/quando remover via
+    PushSubscriptionRepository.remove_many(), mantendo esta função livre de
+    infraestrutura de persistência (é só o adapter do envio via WebPushSender)."""
+    sent = failed = 0
+    removed_ids: list[uuid.UUID] = []
     for sub in subs:
         result = _send_one(sub, title, message, url, sender)
         if result is True:
             sent += 1
         elif result is None:
-            db.delete(sub)
-            removed += 1
+            removed_ids.append(sub.id)
         else:
             failed += 1
 
-    if removed:
-        db.commit()
-
-    return {"sent": sent, "failed": failed, "removed": removed}
-
-
-def send_push_to_customer(
-    customer_id: str,
-    title: str,
-    message: str,
-    url: str,
-    db: Session,
-    sender: WebPushSender = _pywebpush_sender,
-) -> dict:
-    subs = db.query(PushSubscription).filter(PushSubscription.customer_id == customer_id).all()
-    return send_push_to_subscriptions(subs, title, message, url, db, sender)
+    return {"sent": sent, "failed": failed, "removed": len(removed_ids), "removed_ids": removed_ids}

@@ -3,22 +3,13 @@ from datetime import date
 from sqlalchemy import and_, desc
 from sqlalchemy.orm import Session
 
+from app.adapters.db.mapping import row_to_domain
 from app.domain.event import Event, EventFilters
 from app.models import Event as EventModel
 
 
 def _to_domain(row: EventModel) -> Event:
-    return Event(
-        id=row.id,
-        title=row.title,
-        description=row.description,
-        discount=row.discount,
-        start_date=row.start_date,
-        end_date=row.end_date,
-        image_url=row.image_url,
-        active=row.active,
-        created_at=row.created_at,
-    )
+    return row_to_domain(Event, row)
 
 
 class SqlAlchemyEventRepository:

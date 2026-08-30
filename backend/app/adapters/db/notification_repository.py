@@ -1,23 +1,14 @@
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
-from app.core.pagination import MAX_PAGE_SIZE
+from app.adapters.db.mapping import row_to_domain
+from app.core.pagination import clamp_limit
 from app.domain.notification import Notification
 from app.models import Notification as NotificationModel
 
 
 def _to_domain(row: NotificationModel) -> Notification:
-    return Notification(
-        id=row.id,
-        customer_id=row.customer_id,
-        title=row.title,
-        message=row.message,
-        type=row.type,
-        read=row.read,
-        image_url=row.image_url,
-        action_url=row.action_url,
-        created_at=row.created_at,
-    )
+    return row_to_domain(Notification, row)
 
 
 class SqlAlchemyNotificationRepository:
@@ -32,7 +23,7 @@ class SqlAlchemyNotificationRepository:
         if unread_only:
             query = query.filter(~NotificationModel.read)
 
-        capped_limit = min(limit, MAX_PAGE_SIZE)
+        capped_limit = clamp_limit(limit)
         rows = query.order_by(desc(NotificationModel.created_at)).limit(capped_limit).all()
         return [_to_domain(row) for row in rows]
 

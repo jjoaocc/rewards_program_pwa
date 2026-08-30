@@ -1,20 +1,15 @@
+import uuid
+
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.adapters.db.mapping import row_to_domain
 from app.domain.push import PushSubscription, SubscriptionConflictError
 from app.models import PushSubscription as PushSubscriptionModel
 
 
 def _to_domain(row: PushSubscriptionModel) -> PushSubscription:
-    return PushSubscription(
-        id=row.id,
-        customer_id=row.customer_id,
-        endpoint=row.endpoint,
-        p256dh=row.p256dh,
-        auth=row.auth,
-        user_agent=row.user_agent,
-        created_at=row.created_at,
-    )
+    return row_to_domain(PushSubscription, row)
 
 
 class SqlAlchemyPushSubscriptionRepository:
@@ -33,6 +28,7 @@ class SqlAlchemyPushSubscriptionRepository:
             existing.customer_id = customer_id
             existing.p256dh = p256dh
             existing.auth = auth
+            existing.user_agent = user_agent
             self._db.commit()
             return _to_domain(existing), False
 
@@ -55,3 +51,27 @@ class SqlAlchemyPushSubscriptionRepository:
         )
         self._db.commit()
         return deleted
+
+    def list_for_customer(self, customer_id: str) -> list[PushSubscription]:
+        rows = self._db.query(PushSubscriptionModel).filter(PushSubscriptionModel.customer_id == customer_id).all()
+        return [_to_domain(row) for row in rows]
+
+    def list_for_customers(self, customer_ids: list[str]) -> list[PushSubscription]:
+        rows = (
+            self._db.query(PushSubscriptionModel)
+            .filter(PushSubscriptionModel.customer_id.in_(customer_ids))
+            .all()
+        )
+        return [_to_domain(row) for row in rows]
+
+    def list_all(self) -> list[PushSubscription]:
+        rows = self._db.query(PushSubscriptionModel).all()
+        return [_to_domain(row) for row in rows]
+
+    def remove_many(self, subscription_ids: list[uuid.UUID]) -> None:
+        if not subscription_ids:
+            return
+        self._db.query(PushSubscriptionModel).filter(PushSubscriptionModel.id.in_(subscription_ids)).delete(
+            synchronize_session=False
+        )
+        self._db.commit()

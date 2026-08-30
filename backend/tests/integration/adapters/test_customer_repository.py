@@ -76,6 +76,25 @@ def test_update_changes_fields(db_session):
     assert result.name == "Nome Novo"
 
 
+def test_update_includes_the_primary_address_in_the_returned_profile(db_session):
+    """update() devolve o perfil completo (com endereço), igual a get_profile() —
+    evita o caller ter que buscar o cliente de novo só pra pegar o endereço."""
+    customer = _make_customer(db_session)
+    db_session.add(
+        Address(
+            customer_id=customer.id, zip_code="89200-000", street="Rua X", number="1", neighborhood="Centro",
+            city="Joinville", state="SC", is_primary=True,
+        )
+    )
+    db_session.commit()
+    repo = SqlAlchemyCustomerRepository(db_session)
+
+    result = repo.update(customer.id, {"name": "Nome Novo"})
+
+    assert result.address is not None
+    assert result.address.city == "Joinville"
+
+
 def test_update_raises_when_email_already_in_use(db_session):
     _make_customer(db_session, id="C0001", email="a@example.com")
     _make_customer(db_session, id="C0002", email="b@example.com", document="99999999999")

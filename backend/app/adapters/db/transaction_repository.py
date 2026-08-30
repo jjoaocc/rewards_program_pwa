@@ -1,7 +1,7 @@
 from sqlalchemy import desc
 from sqlalchemy.orm import Session, joinedload
 
-from app.core.pagination import MAX_PAGE_SIZE
+from app.core.pagination import clamp_limit
 from app.domain.transaction import Transaction, TransactionItem
 from app.models import Transaction as TransactionModel
 from app.models import TransactionItem as TransactionItemModel
@@ -40,7 +40,7 @@ class SqlAlchemyTransactionRepository:
             .options(joinedload(TransactionModel.items))
             .filter(TransactionModel.customer_id == customer_id)
             .order_by(desc(TransactionModel.created_at))
-            .limit(min(limit, MAX_PAGE_SIZE))
+            .limit(clamp_limit(limit))
             .offset(offset)
             .all()
         )

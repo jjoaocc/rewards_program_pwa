@@ -1,11 +1,8 @@
-from sqlalchemy.orm import Session
+import uuid
 
-from app.core.push import WebPushSender, _pywebpush_sender, send_push_to_customer, send_push_to_subscriptions
+from app.core.push import WebPushSender, _pywebpush_sender, send_push_to_subscriptions
 from app.domain.customer import Customer
 from app.domain.push import PushCampaign, PushSubscription
-from app.models import Notification as NotificationModel
-from app.models import PushCampaign as PushCampaignModel
-from app.models import PushSubscription as PushSubscriptionModel
 from app.ports.customer_repository import CustomerRepository
 from app.ports.notification_repository import NotificationRepository
 from app.ports.push_campaign_repository import PushCampaignRepository
@@ -30,46 +27,48 @@ def list_campaigns(repo: PushCampaignRepository, limit: int = 20) -> list[PushCa
     return repo.list_recent(limit)
 
 
-def _build_notifications(customer_ids: list[str], title: str, message: str, *, url: str) -> list[NotificationModel]:
-    """Monta (sem persistir) uma notificação idêntica pra vários clientes, deixa o
-    caller decidir quando commitar, pra poder agrupar com outros objetos num único
-    commit (ex: o registro de campanha do push admin). Fica em ORM direto (não em
-    NotificationRepository) porque essa otimização de batching é um detalhe de infra
-    do Push, não uma operação de dominio de Notification."""
-    return [
-        NotificationModel(customer_id=customer_id, title=title, message=message, type="system", action_url=url)
-        for customer_id in customer_ids
-    ]
+def _send_and_record(
+    subs: list[PushSubscription],
+    title: str,
+    message: str,
+    url: str,
+    campaign_id: uuid.UUID,
+    subscription_repo: PushSubscriptionRepository,
+    campaign_repo: PushCampaignRepository,
+    sender: WebPushSender,
+) -> dict:
+    result = send_push_to_subscriptions(subs, title, message, url, sender)
+    if result["removed_ids"]:
+        subscription_repo.remove_many(result["removed_ids"])
+    campaign_repo.record_result(campaign_id, result["sent"], result["failed"], result["removed"])
+    return {"sent": result["sent"], "failed": result["failed"], "removed": result["removed"]}
 
 
 def send_to_customer(
-    db: Session,
     customer_id: str,
     title: str,
     message: str,
     url: str,
+    subscription_repo: PushSubscriptionRepository,
     notification_repo: NotificationRepository,
     campaign_repo: PushCampaignRepository,
     sender: WebPushSender = _pywebpush_sender,
 ) -> dict:
     notification_repo.create(customer_id, title, message, action_url=url)
-
     campaign = campaign_repo.create(
         title, message, url, target_type="individual", target_customer_ids=customer_id, customers_targeted=1
     )
-
-    result = send_push_to_customer(customer_id, title, message, url, db, sender)
-    campaign_repo.record_result(campaign.id, result["sent"], result["failed"], result["removed"])
-    return result
+    subs = subscription_repo.list_for_customer(customer_id)
+    return _send_and_record(subs, title, message, url, campaign.id, subscription_repo, campaign_repo, sender)
 
 
 def send_to_customers(
-    db: Session,
     customer_ids: list[str],
     title: str,
     message: str,
     url: str,
     customer_repo: CustomerRepository,
+    subscription_repo: PushSubscriptionRepository,
     campaign_repo: PushCampaignRepository,
     sender: WebPushSender = _pywebpush_sender,
 ) -> dict:
@@ -78,35 +77,26 @@ def send_to_customers(
     existing_ids = customer_repo.filter_existing_ids(customer_ids)
     not_found = [cid for cid in customer_ids if cid not in existing_ids]
 
-    notifications = _build_notifications(existing_ids, title, message, url=url)
-    campaign_row = PushCampaignModel(
-        title=title,
-        message=message,
-        url=url,
+    campaign = campaign_repo.create_and_notify(
+        title,
+        message,
+        url,
         target_type="selected",
         target_customer_ids=",".join(existing_ids),
-        customers_targeted=len(existing_ids),
+        customer_ids_to_notify=existing_ids,
     )
-    # Notificações + campanha entram no mesmo commit (não campaign_repo.create(), que
-    # commitaria sozinho) -- preserva o "1 commit pro lote inteiro", não 1 por cliente.
-    db.add_all(notifications)
-    db.add(campaign_row)
-    db.commit()
 
-    subs = (
-        db.query(PushSubscriptionModel).filter(PushSubscriptionModel.customer_id.in_(existing_ids)).all()
-    )
-    result = send_push_to_subscriptions(subs, title, message, url, db, sender)
-    campaign_repo.record_result(campaign_row.id, result["sent"], result["failed"], result["removed"])
+    subs = subscription_repo.list_for_customers(existing_ids)
+    result = _send_and_record(subs, title, message, url, campaign.id, subscription_repo, campaign_repo, sender)
 
     return {"customers_targeted": len(existing_ids), "not_found": not_found, **result}
 
 
 def broadcast(
-    db: Session,
     title: str,
     message: str,
     url: str,
+    subscription_repo: PushSubscriptionRepository,
     campaign_repo: PushCampaignRepository,
     sender: WebPushSender = _pywebpush_sender,
 ) -> dict:
@@ -116,23 +106,13 @@ def broadcast(
     notificações são criadas num único bulk insert + commit junto com o registro da
     campanha, não um commit por cliente.
     """
-    subs = db.query(PushSubscriptionModel).all()
+    subs = subscription_repo.list_all()
     customer_ids = list({sub.customer_id for sub in subs})
 
-    notifications = _build_notifications(customer_ids, title, message, url=url)
-    campaign_row = PushCampaignModel(
-        title=title,
-        message=message,
-        url=url,
-        target_type="broadcast",
-        target_customer_ids=None,
-        customers_targeted=len(customer_ids),
+    campaign = campaign_repo.create_and_notify(
+        title, message, url, target_type="broadcast", target_customer_ids=None, customer_ids_to_notify=customer_ids
     )
-    db.add_all(notifications)
-    db.add(campaign_row)
-    db.commit()
 
-    result = send_push_to_subscriptions(subs, title, message, url, db, sender)
-    campaign_repo.record_result(campaign_row.id, result["sent"], result["failed"], result["removed"])
+    result = _send_and_record(subs, title, message, url, campaign.id, subscription_repo, campaign_repo, sender)
 
     return {"customers_targeted": len(customer_ids), **result}

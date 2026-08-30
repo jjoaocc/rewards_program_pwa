@@ -30,3 +30,17 @@ class FakePushSubscriptionRepository:
         for ep in to_remove:
             del self._subscriptions[ep]
         return len(to_remove)
+
+    def list_for_customer(self, customer_id: str) -> list[PushSubscription]:
+        return [s for s in self._subscriptions.values() if s.customer_id == customer_id]
+
+    def list_for_customers(self, customer_ids: list[str]) -> list[PushSubscription]:
+        return [s for s in self._subscriptions.values() if s.customer_id in customer_ids]
+
+    def list_all(self) -> list[PushSubscription]:
+        return list(self._subscriptions.values())
+
+    def remove_many(self, subscription_ids: list[uuid.UUID]) -> None:
+        to_remove = [ep for ep, sub in self._subscriptions.items() if sub.id in subscription_ids]
+        for ep in to_remove:
+            del self._subscriptions[ep]

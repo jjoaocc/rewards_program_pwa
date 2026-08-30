@@ -8,9 +8,8 @@ def get_profile(repo: CustomerRepository, customer_id: str) -> Customer | None:
     return repo.get_profile(customer_id)
 
 
-def update_profile(repo: CustomerRepository, customer_id: str, update_data: dict) -> Customer | None:
-    repo.update(customer_id, update_data)
-    return repo.get_profile(customer_id)
+def update_profile(repo: CustomerRepository, customer_id: str, update_data: dict) -> Customer:
+    return repo.update(customer_id, update_data)
 
 
 def get_stats(repo: CustomerRepository, customer_id: str, member_since: datetime) -> CustomerStats:

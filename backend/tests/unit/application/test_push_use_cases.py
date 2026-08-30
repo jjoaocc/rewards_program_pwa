@@ -1,11 +1,23 @@
 import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 
-from app.application.push_use_cases import list_campaigns, search_customers, subscribe, unsubscribe
+from pywebpush import WebPushException
+
+from app.application.push_use_cases import (
+    broadcast,
+    list_campaigns,
+    search_customers,
+    send_to_customer,
+    send_to_customers,
+    subscribe,
+    unsubscribe,
+)
 from app.domain.customer import Customer
 from app.domain.push import PushCampaign
 from tests.fakes.fake_customer_repository import FakeCustomerRepository
+from tests.fakes.fake_notification_repository import FakeNotificationRepository
 from tests.fakes.fake_push_campaign_repository import FakePushCampaignRepository
 from tests.fakes.fake_push_subscription_repository import FakePushSubscriptionRepository
 
@@ -109,3 +121,91 @@ def test_list_campaigns_respects_limit():
     result = list_campaigns(repo, limit=2)
 
     assert len(result) == 2
+
+
+def _fake_sender(*, subscription_info, data, vapid_private_key, vapid_claims):
+    pass
+
+
+def test_send_to_customer_creates_notification_and_records_campaign():
+    sub_repo = FakePushSubscriptionRepository()
+    subscribe(sub_repo, "C0001", "https://a", "p", "a", None)
+    notification_repo = FakeNotificationRepository()
+    campaign_repo = FakePushCampaignRepository()
+
+    result = send_to_customer(
+        "C0001", "Título", "Mensagem", "/", sub_repo, notification_repo, campaign_repo, sender=_fake_sender
+    )
+
+    assert result == {"sent": 1, "failed": 0, "removed": 0}
+    notifications = notification_repo.list_for_customer("C0001")
+    assert len(notifications) == 1
+    assert notifications[0].title == "Título"
+    campaigns = campaign_repo.list_recent(limit=1)
+    assert campaigns[0].target_type == "individual"
+    assert campaigns[0].sent == 1
+
+
+def test_send_to_customers_reports_ids_that_do_not_exist():
+    customer_repo = FakeCustomerRepository([_make_customer(id="C0001")])
+    sub_repo = FakePushSubscriptionRepository()
+    subscribe(sub_repo, "C0001", "https://a", "p", "a", None)
+    notification_repo = FakeNotificationRepository()
+    campaign_repo = FakePushCampaignRepository(notification_repo=notification_repo)
+
+    result = send_to_customers(
+        ["C0001", "nao-existe"], "Título", "Mensagem", "/", customer_repo, sub_repo, campaign_repo,
+        sender=_fake_sender,
+    )
+
+    assert result["customers_targeted"] == 1
+    assert result["not_found"] == ["nao-existe"]
+    assert len(notification_repo.list_for_customer("C0001")) == 1
+
+
+def test_send_to_customers_only_notifies_customers_that_exist():
+    customer_repo = FakeCustomerRepository(
+        [_make_customer(id="C0001"), _make_customer(id="C0002", email="b@example.com")]
+    )
+    sub_repo = FakePushSubscriptionRepository()
+    notification_repo = FakeNotificationRepository()
+    campaign_repo = FakePushCampaignRepository(notification_repo=notification_repo)
+
+    send_to_customers(
+        ["C0001", "C0002"], "Título", "Mensagem", "/", customer_repo, sub_repo, campaign_repo, sender=_fake_sender
+    )
+
+    assert len(notification_repo.list_for_customer("C0001")) == 1
+    assert len(notification_repo.list_for_customer("C0002")) == 1
+
+
+def test_broadcast_targets_every_customer_with_a_subscription():
+    sub_repo = FakePushSubscriptionRepository()
+    subscribe(sub_repo, "C0001", "https://a", "p", "a", None)
+    subscribe(sub_repo, "C0002", "https://b", "p", "a", None)
+    notification_repo = FakeNotificationRepository()
+    campaign_repo = FakePushCampaignRepository(notification_repo=notification_repo)
+
+    result = broadcast("Título", "Mensagem", "/", sub_repo, campaign_repo, sender=_fake_sender)
+
+    assert result["customers_targeted"] == 2
+    assert result["sent"] == 2
+    assert len(notification_repo.list_for_customer("C0001")) == 1
+    assert len(notification_repo.list_for_customer("C0002")) == 1
+
+
+def test_send_to_customer_removes_subscription_reported_as_expired():
+    sub_repo = FakePushSubscriptionRepository()
+    sub, _ = subscribe(sub_repo, "C0001", "https://a", "p", "a", None)
+    notification_repo = FakeNotificationRepository()
+    campaign_repo = FakePushCampaignRepository()
+
+    def _expired_sender(*, subscription_info, data, vapid_private_key, vapid_claims):
+        raise WebPushException("expired", response=SimpleNamespace(status_code=410))
+
+    result = send_to_customer(
+        "C0001", "Título", "Mensagem", "/", sub_repo, notification_repo, campaign_repo, sender=_expired_sender
+    )
+
+    assert result == {"sent": 0, "failed": 0, "removed": 1}
+    assert sub_repo.list_for_customer("C0001") == []
