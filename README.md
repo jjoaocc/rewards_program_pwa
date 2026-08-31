@@ -1,6 +1,6 @@
-# 🏗️ Rewards Program — PWA de Fidelidade para Varejo
+# 🏗️ Rewards Program, PWA de Fidelidade para Varejo
 
-Programa de fidelidade/cashback rodando em produção real. Clientes acompanham saldo de recompensas, histórico de transações, eventos/promoções e recebem notificações push — tudo via PWA instalável em qualquer dispositivo. Inclui um painel administrativo separado para disparo de notificações.
+Programa de fidelidade/cashback rodando em produção real. Clientes acompanham saldo de recompensas, histórico de transações, eventos/promoções e recebem notificações push, tudo via PWA instalável em qualquer dispositivo. Inclui um painel administrativo separado para disparo de notificações.
 
 > **Stack:** React 19 · TypeScript · Tailwind CSS v4 · FastAPI · PostgreSQL · Docker
 
@@ -10,8 +10,21 @@ Programa de fidelidade/cashback rodando em produção real. Clientes acompanham 
 
 ---
 
+## 💡 Sobre o projeto
+
+Este é um projeto pessoal, construído do zero como programa de fidelidade completo (não é um bootcamp/tutorial), usado de verdade pelo autor no dia a dia. Serve tanto como aplicação real quanto como material de portfólio/estudo, por isso o cuidado extra com arquitetura, testes e automação, não é só "fazer funcionar", é praticar como um projeto profissional seria construído e mantido:
+
+- **Arquitetura hexagonal** no backend (domain → ports → adapters → application), TDD como prática padrão, não only-in-theory.
+- **CI/CD real**: todo push roda lint, checagem de tipos, análise estática de segurança, auditoria de dependências e a suíte de testes completa; o deploy só acontece se tudo passar.
+- **Frontend com portas injetáveis** (o mesmo princípio de inversão de dependência do backend, aplicado no React) e validação de contrato em runtime (zod) contra a API real.
+
+Veja [Arquitetura](#-arquitetura) e [Decisões Técnicas](#-decisões-técnicas) para o raciocínio por trás de cada escolha.
+
+---
+
 ## 📋 Índice
 
+- [Sobre o projeto](#-sobre-o-projeto)
 - [Funcionalidades](#-funcionalidades)
 - [Arquitetura](#-arquitetura)
 - [Segurança](#-segurança)
@@ -20,13 +33,14 @@ Programa de fidelidade/cashback rodando em produção real. Clientes acompanham 
 - [Configuração do Ambiente](#-configuração-do-ambiente)
 - [Banco de Dados](#-banco-de-dados)
 - [Testes](#-testes)
+- [CI/CD](#-cicd)
 - [Rodando Localmente](#-rodando-localmente)
 - [Deploy em Produção](#-deploy-em-produção)
 - [Push Notifications (VAPID)](#-push-notifications-vapid)
 - [Painel Admin](#-painel-admin)
 - [API Reference](#-api-reference)
-- [Frontend — Estrutura e Padrões](#-frontend--estrutura-e-padrões)
-- [PWA — Instalação](#-pwa--instalação)
+- [Frontend, Estrutura e Padrões](#-frontend-estrutura-e-padrões)
+- [PWA, Instalação](#-pwa-instalação)
 - [Variáveis de Ambiente](#-variáveis-de-ambiente)
 - [Decisões Técnicas](#-decisões-técnicas)
 
@@ -43,7 +57,7 @@ Programa de fidelidade/cashback rodando em produção real. Clientes acompanham 
 | Eventos e promoções com carrossel | ✅ |
 | Notificações in-app (sino), com marcação de lida e remoção | ✅ |
 | Push Notifications via Web Push API (VAPID) | ✅ |
-| Painel admin (app React próprio) — individual, seleção múltipla, broadcast e histórico de envios | ✅ |
+| Painel admin (app React próprio), individual, seleção múltipla, broadcast e histórico de envios | ✅ |
 | Perfil editável (dados pessoais, e-mail principal/secundário, endereço) | ✅ |
 | PWA instalável (iOS, Android, Desktop) | ✅ |
 | Suporte a CPF (PF) e CNPJ (PJ) | ✅ |
@@ -77,19 +91,33 @@ Programa de fidelidade/cashback rodando em produção real. Clientes acompanham 
 ```
 
 **Redes Docker:**
-- `proxy-network` — conecta frontend e backend ao Nginx Proxy Manager. Nenhum dos dois containers publica porta no host — só é alcançável via essa rede.
-- `database-network` — conecta backend ao PostgreSQL (isolado do frontend).
+- `proxy-network`, conecta frontend e backend ao Nginx Proxy Manager. Nenhum dos dois containers publica porta no host, só é alcançável via essa rede.
+- `database-network`, conecta backend ao PostgreSQL (isolado do frontend).
 
-O frontend é servido em `rewards.strokes.dev.br` (subdomínio próprio). O backend fica atrás de `api.strokes.dev.br`, um domínio compartilhado com outros projetos na mesma VPS, roteado por path (`/rewards/`) via Custom Location do Nginx Proxy Manager — o backend usa `ROOT_PATH` só para o Swagger/OpenAPI gerar os links públicos corretos.
+O frontend é servido em `rewards.strokes.dev.br` (subdomínio próprio). O backend fica atrás de `api.strokes.dev.br`, um domínio compartilhado com outros projetos na mesma VPS, roteado por path (`/rewards/`) via Custom Location do Nginx Proxy Manager, o backend usa `ROOT_PATH` só para o Swagger/OpenAPI gerar os links públicos corretos.
+
+### Backend, hexagonal (ports & adapters)
+
+Cada domínio (customer, transaction, notification, product, event, push, auth) segue o mesmo fluxo, de dentro pra fora:
+
+```
+domain/        → entidades puras (dataclasses), zero SQLAlchemy/Pydantic/I-O
+ports/         → Protocols, o contrato que a aplicação depende (ex: CustomerRepository)
+adapters/db/   → implementação concreta dos ports com SQLAlchemy
+application/   → casos de uso, orquestram domain + ports, não conhecem HTTP nem SQL
+api/v1/        → routers FastAPI, só tratam requisição/resposta HTTP
+```
+
+A regra de dependência é sempre pra dentro: `api` depende de `application`, que depende de `ports` (nunca de `adapters` diretamente), a injeção do adapter concreto acontece só em `api/deps.py` (composition root). Isso permite testar `application/` inteiro com **fakes** em memória (`tests/fakes/`), sem precisar de banco, e reservar os testes com Postgres real (`tests/integration/`) pra validar só o mapeamento SQL ↔ domínio.
 
 ---
 
 ## 🔐 Segurança
 
 - **Autenticação de cliente**: JWT (PyJWT) com `sub` = ID do cliente, expiração configurável (`ACCESS_TOKEN_EXPIRE_MINUTES`). Senhas com `bcrypt` puro (sem passlib).
-- **Rate limiting** (`slowapi`): 5/min em `/auth/login`, 5/min em `/push/admin/login`, 10/min nos envios de push admin. A chave de limite usa o primeiro IP de `X-Forwarded-For`, não `request.client.host` — necessário porque o backend só é alcançável via o proxy (Nginx Proxy Manager), então o IP de conexão direta seria sempre o do proxy, não o do cliente real.
-- **Security headers**: middleware próprio (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`) e uma Content-Security-Policy restritiva (`default-src 'self'`) em ambas as camadas (FastAPI e Nginx do frontend) — os endpoints de documentação (`/docs`, `/redoc`) ficam isentos da CSP mais estrita.
-- **Painel admin**: autenticação por secret (`PUSH_ADMIN_SECRET`), mas o painel nunca guarda esse secret no navegador — troca ele por um token de sessão de curta duração (JWT, 12h, `POST /push/admin/login`) e usa esse token (`Authorization: Bearer`) nas chamadas seguintes. O header `X-Admin-Secret` continua aceito como alternativa (scripts/automação).
+- **Rate limiting** (`slowapi`): 5/min em `/auth/login`, 5/min em `/push/admin/login`, 10/min nos envios de push admin. A chave de limite usa o primeiro IP de `X-Forwarded-For`, não `request.client.host`, necessário porque o backend só é alcançável via o proxy (Nginx Proxy Manager), então o IP de conexão direta seria sempre o do proxy, não o do cliente real.
+- **Security headers**: middleware próprio (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`) e uma Content-Security-Policy restritiva (`default-src 'self'`) em ambas as camadas (FastAPI e Nginx do frontend), os endpoints de documentação (`/docs`, `/redoc`) ficam isentos da CSP mais estrita.
+- **Painel admin**: autenticação por secret (`PUSH_ADMIN_SECRET`), mas o painel nunca guarda esse secret no navegador, troca ele por um token de sessão de curta duração (JWT, 12h, `POST /push/admin/login`) e usa esse token (`Authorization: Bearer`) nas chamadas seguintes. O header `X-Admin-Secret` continua aceito como alternativa (scripts/automação).
 - **Paginação com teto**: todos os endpoints de listagem (`/transactions`, `/notifications`, `/products`) têm um limite máximo de itens por página, mesmo que o cliente peça mais.
 
 ---
@@ -119,22 +147,22 @@ rewards/
 │   │   │   ├── limiter.py              # slowapi, key_func por X-Forwarded-For
 │   │   │   ├── pagination.py           # MAX_PAGE_SIZE compartilhado
 │   │   │   └── push.py                 # envio via pywebpush (porta WebPushSender injetável)
-│   │   ├── services/                   # regra de negócio, chamado pelos routers
-│   │   │   ├── auth_service.py
-│   │   │   ├── customer_service.py
-│   │   │   ├── transaction_service.py
-│   │   │   ├── notification_service.py
-│   │   │   ├── product_service.py
-│   │   │   ├── event_service.py
-│   │   │   └── push_service.py         # subscribe, envio individual/seleção/broadcast, campanhas
-│   │   ├── models/                     # SQLAlchemy — um arquivo por tabela
-│   │   ├── schemas/                    # Pydantic — request/response por domínio
+│   │   ├── domain/                     # entidades puras (dataclasses), um arquivo por domínio
+│   │   ├── ports/                      # Protocols, contratos que application depende
+│   │   ├── adapters/db/                # implementação SQLAlchemy dos ports
+│   │   ├── application/                # casos de uso (product_use_cases.py, push_use_cases.py...)
+│   │   ├── models/                     # SQLAlchemy, um arquivo por tabela (Mapped[]/mapped_column)
+│   │   ├── schemas/                    # Pydantic, request/response por domínio
 │   │   └── main.py                     # App FastAPI, middlewares, health check, routers
-│   ├── tests/                          # pytest + testcontainers (Postgres efêmero)
+│   ├── tests/
+│   │   ├── unit/application/           # casos de uso com fakes em memória, sem banco
+│   │   ├── integration/adapters/       # adapters SQLAlchemy contra Postgres real (testcontainers)
+│   │   ├── fakes/                      # implementações fake dos ports (não mocks)
+│   │   └── test_*.py                   # contrato HTTP completo, via TestClient + Postgres real
 │   ├── Dockerfile
 │   ├── requirements.txt
 │   ├── requirements-dev.txt
-│   └── pyproject.toml                  # config do pytest e do ruff
+│   └── pyproject.toml                  # ruff, mypy, bandit, pytest
 │
 ├── frontend/                           # React 19 + TypeScript + Vite
 │   ├── public/                         # ícones, manifest, favicons
@@ -239,7 +267,7 @@ print('VAPID_PUBLIC_KEY=' + public)
 "
 ```
 
-Cole os valores no `.env`. As chaves são geradas **uma única vez** — rotacioná-las invalida todas as subscriptions existentes.
+Cole os valores no `.env`. As chaves são geradas **uma única vez**, rotacioná-las invalida todas as subscriptions existentes.
 
 ### 4. Gere uma SECRET_KEY segura
 
@@ -260,16 +288,16 @@ python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 ### Estrutura das tabelas
 
 ```
-customers            — Clientes (CPF ou CNPJ), com e-mail principal e secundário
-  └── addresses       — Endereços (um primário por cliente)
-  └── transactions    — Transações de cashback
-        └── transaction_items — Itens da compra
-  └── notifications   — Notificações in-app
-  └── push_subscriptions — Subscriptions Web Push por dispositivo
+customers             clientes (CPF ou CNPJ), com e-mail principal e secundário
+  └── addresses        endereços (um primário por cliente)
+  └── transactions     transações de cashback
+        └── transaction_items   itens da compra
+  └── notifications    notificações in-app
+  └── push_subscriptions   subscriptions Web Push por dispositivo
 
-products              — Catálogo de produtos para resgate
-events                — Eventos e promoções
-push_campaigns         — Histórico de envios do painel admin (individual/seleção/broadcast)
+products               catálogo de produtos para resgate
+events                 eventos e promoções
+push_campaigns         histórico de envios do painel admin (individual/seleção/broadcast)
 ```
 
 ### Inicialização do banco do zero
@@ -297,7 +325,7 @@ for f in database/migrations/*.sql; do
 done
 ```
 
-> Não há um runner de migração automático (nem Alembic) — cada arquivo em `database/migrations/` é aplicado manualmente, uma vez, na ordem numérica.
+> Não há um runner de migração automático (nem Alembic), cada arquivo em `database/migrations/` é aplicado manualmente, uma vez, na ordem numérica.
 
 #### Verificar se as tabelas foram criadas
 
@@ -329,7 +357,7 @@ O login aceita tanto o código numérico quanto o e-mail cadastrado.
 |---|---|
 | `001_add_products_events_redemptions.sql` | Tabelas `products`, `events` + dados mock |
 | `002_add_transaction_items.sql` | Tabela `transaction_items` + dados mock de itens |
-| `003_add_push_subscriptions.sql` | Tabela `push_subscriptions` (documentação — criada pelo SQLAlchemy) |
+| `003_add_push_subscriptions.sql` | Tabela `push_subscriptions` (documentação, criada pelo SQLAlchemy) |
 | `004_remove_redemptions.sql` | Remove a tabela de resgates (feature nunca teve endpoint na API) |
 | `005_add_customer_secondary_email.sql` | Coluna `secondary_email` em `customers` |
 | `006_add_push_campaigns.sql` | Tabela `push_campaigns` (histórico de envios do painel admin) |
@@ -338,7 +366,7 @@ O login aceita tanto o código numérico quanto o e-mail cadastrado.
 
 ## 🧪 Testes
 
-### Backend — pytest + testcontainers
+### Backend, pytest + testcontainers
 
 Sobe um PostgreSQL efêmero em container pra rodar a suíte, sem precisar de um banco local configurado:
 
@@ -348,16 +376,18 @@ pip install -r requirements.txt -r requirements-dev.txt
 pytest -v --cov=app
 ```
 
-~100 testes, cobertura ~99%. Cada teste roda numa transação com savepoint que é revertida ao final (isolamento rápido, sem recriar o schema a cada teste).
+181 testes, cobertura ~99%, divididos em 3 camadas: casos de uso com fakes em memória (`tests/unit/`, sem banco), adapters contra Postgres real (`tests/integration/`) e contrato HTTP completo via `TestClient` (`tests/test_*.py`, também contra Postgres real). Cada teste roda numa transação com savepoint que é revertida ao final (isolamento rápido, sem recriar o schema a cada teste).
 
-Lint e formatação (ruff):
+Lint, tipos e segurança:
 
 ```bash
-ruff check .
-ruff format .
+ruff check .                          # lint
+mypy app/                             # checagem de tipos estática
+bandit -r app/                        # análise de segurança estática
+pip-audit -r requirements.txt         # CVE conhecidos nas dependências
 ```
 
-### Frontend — vitest + React Testing Library
+### Frontend, vitest + React Testing Library
 
 ```bash
 cd frontend
@@ -366,13 +396,28 @@ npm test          # roda uma vez
 npm run test:watch  # modo watch
 ```
 
-~168 testes (hooks, componentes, views e o app admin), usando portas injetáveis (`ApiClientPort`/`AdminApiClientPort`) em vez de mockar módulos inteiros sempre que possível.
+210 testes (hooks, componentes, views e o app admin), usando portas injetáveis (`ApiClientPort`/`AdminApiClientPort`) em vez de mockar módulos inteiros sempre que possível.
 
 ```bash
 npx tsc -b --noEmit   # type-check
 npm run lint          # eslint
+npm audit --audit-level=high  # CVE conhecidos nas dependências
 npm run build         # build de produção (valida os dois entry points: app + admin)
 ```
+
+---
+
+## 🔁 CI/CD
+
+GitHub Actions roda a cada push em `main` ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)):
+
+| Job | O que roda | Onde |
+|---|---|---|
+| `backend-ci` | ruff, mypy, bandit, pip-audit, pytest (cobertura) | runner do GitHub |
+| `frontend-ci` | npm audit, eslint, vitest, build (tsc + vite) | runner do GitHub |
+| `deploy` | `git pull` + `docker compose build --no-cache` + `up -d` + healthcheck | self-hosted runner na própria VPS |
+
+O job de deploy só roda se os dois anteriores passarem, e faz uma checagem de saúde pós-deploy (`/health` do backend + frontend respondendo) antes de considerar a execução bem-sucedida, se a checagem falhar, o workflow falha e fica visível no histórico de Actions.
 
 ---
 
@@ -415,7 +460,7 @@ uvicorn app.main:app --reload --port 8000
 
 ## 🚀 Deploy em Produção
 
-O projeto usa **Nginx Proxy Manager** como reverse proxy na VPS com SSL automático via Let's Encrypt e **Cloudflare** para DNS. Backend e frontend não publicam porta nenhuma no host — só são alcançáveis via a rede Docker do proxy.
+O projeto usa **Nginx Proxy Manager** como reverse proxy na VPS com SSL automático via Let's Encrypt e **Cloudflare** para DNS. Backend e frontend não publicam porta nenhuma no host, só são alcançáveis via a rede Docker do proxy.
 
 ### Estrutura de redes Docker
 
@@ -459,7 +504,7 @@ docker compose up -d --build frontend
    |---|---|---|
    | `/rewards/` | `rewards_backend` | `8000` |
 
-   > A barra final em `/rewards/` faz o Nginx remover o prefixo antes de repassar a requisição ao container — o backend continua recebendo `/api/v1/...`, `/health`, `/docs`, etc. como se estivesse na raiz. `ROOT_PATH=/rewards` no `.env` só existe para o Swagger/OpenAPI gerar os links públicos corretos.
+   > A barra final em `/rewards/` faz o Nginx remover o prefixo antes de repassar a requisição ao container, o backend continua recebendo `/api/v1/...`, `/health`, `/docs`, etc. como se estivesse na raiz. `ROOT_PATH=/rewards` no `.env` só existe para o Swagger/OpenAPI gerar os links públicos corretos.
 
 Ative SSL (Let's Encrypt) e force HTTPS em ambos os Proxy Hosts.
 
@@ -475,7 +520,7 @@ docker exec -i postgres psql -U dbuser -d rewards_db < database/migrations/00X_n
 
 ## 🔔 Push Notifications (VAPID)
 
-Web Push API com VAPID — sem dependência de serviços externos (OneSignal, Firebase, etc.). Funciona em iOS Safari (16.4+), Android Chrome/Firefox e navegadores desktop.
+Web Push API com VAPID, sem dependência de serviços externos (OneSignal, Firebase, etc.). Funciona em iOS Safari (16.4+), Android Chrome/Firefox e navegadores desktop.
 
 ### Fluxo completo
 
@@ -531,12 +576,12 @@ App React separado (build multi-page do Vite), não misturado com o bundle do ap
 
 ### Abas
 
-- **👤 Individual** — busca um cliente (nome, e-mail ou ID) e envia push pra ele
-- **🎯 Selecionados** — busca e seleciona vários clientes, envia pra todos de uma vez (reporta IDs não encontrados, se houver)
-- **📢 Broadcast** — envia pra todos os clientes com notificações ativas (com confirmação)
-- **🕒 Histórico** — lista os envios recentes (tipo de alvo, quantos foram atingidos, enviados/falhados/removidos, quando)
+- **👤 Individual**, busca um cliente (nome, e-mail ou ID) e envia push pra ele
+- **🎯 Selecionados**, busca e seleciona vários clientes, envia pra todos de uma vez (reporta IDs não encontrados, se houver)
+- **📢 Broadcast**, envia pra todos os clientes com notificações ativas (com confirmação)
+- **🕒 Histórico**, lista os envios recentes (tipo de alvo, quantos foram atingidos, enviados/falhados/removidos, quando)
 
-Todas as abas têm pré-visualização em tempo real de como a notificação vai aparecer. O login troca a senha por um token de sessão (12h) — o secret em si nunca fica salvo no navegador.
+Todas as abas têm pré-visualização em tempo real de como a notificação vai aparecer. O login troca a senha por um token de sessão (12h), o secret em si nunca fica salvo no navegador.
 
 ---
 
@@ -560,7 +605,7 @@ Endpoints do painel admin (`/push/send`, `/push/send-bulk`, `/push/broadcast`, `
 | Método | Rota | Auth | Descrição |
 |---|---|---|---|
 | POST | `/auth/login` | ❌ | Login com e-mail/código + senha |
-| POST | `/auth/logout` | ❌ | Logout (JWT é stateless — cosmético) |
+| POST | `/auth/logout` | ❌ | Logout (JWT é stateless, cosmético) |
 | GET | `/auth/me` | JWT | Dados do usuário autenticado |
 | GET | `/customers/me` | JWT | Perfil completo do cliente |
 | PATCH | `/customers/me` | JWT | Atualizar dados do perfil |
@@ -585,17 +630,17 @@ Endpoints do painel admin (`/push/send`, `/push/send-bulk`, `/push/broadcast`, `
 
 ---
 
-## 🎨 Frontend — Estrutura e Padrões
+## 🎨 Frontend, Estrutura e Padrões
 
 ### Roteamento
 
-O app principal usa **roteamento por estado** (`useState<ActivePage>`) em vez de React Router — simples para um SPA mobile-first de tela única:
+O app principal usa **roteamento por estado** (`useState<ActivePage>`) em vez de React Router, simples para um SPA mobile-first de tela única:
 
 ```typescript
 type ActivePage = 'inicio' | 'extrato' | 'eventos' | 'perfil' | 'ajuda' | 'termos' | 'privacidade'
 ```
 
-O painel admin (`src/admin/`) é outro app React inteiramente separado, com seu próprio entry point e bundle — não compartilha rota nem estado com o app do cliente.
+O painel admin (`src/admin/`) é outro app React inteiramente separado, com seu próprio entry point e bundle, não compartilha rota nem estado com o app do cliente.
 
 ### Fluxo de dados
 
@@ -611,7 +656,7 @@ App.tsx (AuthenticatedApp)
   └── ProfileView ← customer + usePushNotifications()
 ```
 
-Cada hook de dados valida a resposta da API em runtime com **zod** (`XxxApiResponseSchema`) antes de mapear pro tipo de domínio — pega divergências de schema que o TypeScript sozinho não detectaria.
+Cada hook de dados valida a resposta da API em runtime com **zod** (`XxxApiResponseSchema`) antes de mapear pro tipo de domínio, pega divergências de schema que o TypeScript sozinho não detectaria.
 
 ### Portas injetáveis
 
@@ -619,11 +664,11 @@ Cada hook de dados valida a resposta da API em runtime com **zod** (`XxxApiRespo
 
 ### Service Worker
 
-`src/sw.ts` usa Workbox (`injectManifest`) para precache dos assets do app principal, limpeza de caches antigos e os handlers de `push`/`notificationclick`. O painel admin (`admin.html` e seu bundle) é excluído do precache de propósito — não faz parte da experiência offline do cliente.
+`src/sw.ts` usa Workbox (`injectManifest`) para precache dos assets do app principal, limpeza de caches antigos e os handlers de `push`/`notificationclick`. O painel admin (`admin.html` e seu bundle) é excluído do precache de propósito, não faz parte da experiência offline do cliente.
 
 ---
 
-## 📱 PWA — Instalação
+## 📱 PWA, Instalação
 
 ### iOS (Safari)
 
@@ -694,17 +739,17 @@ PUSH_ADMIN_SECRET=SENHA_FORTE_AQUI         # python3 -c "import secrets; print(s
 
 Para um PWA mobile-first com uma única tela visível por vez e bottom nav, `useState<ActivePage>` é mais simples, sem overhead de configuração, e funciona bem com as animações de transição.
 
-### Por que uma camada de serviços separada dos routers?
+### Por que hexagonal em vez de só uma camada de services?
 
-Os routers (`app/api/v1/*.py`) só lidam com HTTP (validação de request, status codes, dependências). Toda regra de negócio (queries, regras de posse, agregações) fica em `app/services/*.py` — mais fácil de testar isoladamente e de reaproveitar entre endpoints.
+O projeto começou com uma camada de `services/` separada dos routers (regra de negócio fora do HTTP), o que já ajudava bastante. A migração pra hexagonal foi um passo além: `application/` (os casos de uso) passou a depender só de `ports/` (Protocols), nunca de SQLAlchemy diretamente, quem implementa o port é `adapters/db/`, injetado no composition root (`api/deps.py`). Na prática isso significa que a lógica de negócio pode ser testada com um fake em memória, sem precisar subir um Postgres, e trocar de banco (ou adicionar um segundo backend de dados) não tocaria em `application/` nem em `domain/`.
 
 ### Por que zod no frontend, se já tem TypeScript?
 
-TypeScript só valida em tempo de compilação — não protege contra a API real devolver um formato diferente do esperado em runtime. Os schemas zod (`XxxApiResponseSchema`) validam a resposta de fato antes de confiar nela, e o tipo TypeScript é inferido do schema (`z.infer`), então os dois nunca divergem.
+TypeScript só valida em tempo de compilação, não protege contra a API real devolver um formato diferente do esperado em runtime. Os schemas zod (`XxxApiResponseSchema`) validam a resposta de fato antes de confiar nela, e o tipo TypeScript é inferido do schema (`z.infer`), então os dois nunca divergem.
 
 ### Por que Web Push com VAPID em vez de Firebase/OneSignal?
 
-Zero custo, zero dependência externa, dados ficam no próprio banco, mesmo código funciona em todos os browsers. A limitação é iOS 16.4+ — mas o app já é PWA-only.
+Zero custo, zero dependência externa, dados ficam no próprio banco, mesmo código funciona em todos os browsers. A limitação é iOS 16.4+, mas o app já é PWA-only.
 
 ### Por que o painel admin é um app React separado (não parte do bundle principal)?
 
@@ -716,7 +761,11 @@ Schema estável, um único desenvolvedor. Scripts SQL manuais e sequenciais em `
 
 ### Por que `injectManifest` em vez de `generateSW` no service worker?
 
-`generateSW` não permite handlers customizados. `injectManifest` dá controle total sobre o Service Worker — necessário para o handler de `push` das notificações.
+`generateSW` não permite handlers customizados. `injectManifest` dá controle total sobre o Service Worker, necessário para o handler de `push` das notificações.
+
+### Por que self-hosted runner para o deploy, em vez de um serviço gerenciado?
+
+O deploy precisa rodar `docker compose build` direto na VPS onde os containers já vivem (`rewards_backend`/`rewards_frontend` usam redes Docker internas, sem porta publicada). Um runner self-hosted registrado na própria VPS (rodado como processo simples, sem systemd) evita depender de credenciais de deploy remoto (SSH, registry de imagens), o job `deploy` só roda depois que `backend-ci`/`frontend-ci` passam num runner do GitHub, isolado da VPS.
 
 ---
 
@@ -754,4 +803,4 @@ Schema estável, um único desenvolvedor. Scripts SQL manuais e sequenciais em `
 
 ## 📝 Licença
 
-Projeto privado desenvolvido para fins profissionais e educacionais. Joinville, SC.
+Código aberto para consulta, aprendizado e avaliação (portfólio/acadêmico). Todos os direitos reservados ao autor, sem licença de uso, cópia ou distribuição concedida.
