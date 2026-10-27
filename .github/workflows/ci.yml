@@ -84,10 +84,12 @@ jobs:
     environment: production
 
     steps:
-      - name: Git pull + rebuild
+      - name: Git checkout main + rebuild
         run: |
           cd /opt/containers/rewards
-          git pull origin main
+          git fetch origin main
+          git checkout main
+          git reset --hard origin/main
           docker compose build --no-cache
           docker compose up -d
 
