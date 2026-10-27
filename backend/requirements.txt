@@ -7,7 +7,7 @@ sqlalchemy==2.0.36
 psycopg[binary]==3.3.3
 
 # Authentication
-pyjwt==2.13.0
+pyjwt==2.15.0
 bcrypt==5.0.0
 
 # Validation
