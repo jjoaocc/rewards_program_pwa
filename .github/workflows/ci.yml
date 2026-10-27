@@ -3,6 +3,8 @@ name: CI
 on:
   push:
     branches: ["main"]
+  pull_request:
+    branches: ["main"]
 
 jobs:
   backend-ci:
@@ -77,6 +79,7 @@ jobs:
   deploy:
     name: Deploy (VPS)
     needs: [backend-ci, frontend-ci]
+    if: github.event_name == 'push'
     runs-on: [self-hosted, vps]
     environment: production
 
