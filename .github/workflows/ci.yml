@@ -78,6 +78,7 @@ jobs:
     name: Deploy (VPS)
     needs: [backend-ci, frontend-ci]
     runs-on: [self-hosted, vps]
+    environment: production
 
     steps:
       - name: Git pull + rebuild
