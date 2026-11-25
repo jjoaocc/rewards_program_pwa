@@ -2,7 +2,9 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from app.application.product_use_cases import get_product, list_products
+import pytest
+
+from app.application.product_use_cases import InvalidPointsRangeError, get_product, list_products
 from app.domain.product import Product, ProductFilters
 from tests.fakes.fake_product_repository import FakeProductRepository
 
@@ -90,3 +92,19 @@ def test_get_product_returns_the_matching_product():
 
     assert result is not None
     assert result.name == "Furadeira"
+
+
+def test_list_products_rejects_inverted_points_range():
+    """Regra da Issue: min_points maior que max_points é uma faixa impossível e deve ser recusada."""
+    repo = FakeProductRepository([_make_product(name="A", points_cost=Decimal("50.00"))])
+
+    with pytest.raises(InvalidPointsRangeError):
+        list_products(repo, ProductFilters(min_points=Decimal("500"), max_points=Decimal("100")))
+
+
+def test_list_products_accepts_equal_min_and_max_points():
+    repo = FakeProductRepository([_make_product(name="Exato", points_cost=Decimal("100.00"))])
+
+    result = list_products(repo, ProductFilters(min_points=Decimal("100"), max_points=Decimal("100")))
+
+    assert [p.name for p in result] == ["Exato"]

@@ -31,7 +31,10 @@ def get_products(
         in_stock=in_stock,
         active_only=active_only,
     )
-    return product_use_cases.list_products(repo, filters)
+    try:
+        return product_use_cases.list_products(repo, filters)
+    except product_use_cases.InvalidPointsRangeError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.get("/{product_id}", response_model=ProductResponse)

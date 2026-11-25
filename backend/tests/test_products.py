@@ -72,6 +72,15 @@ def test_products_filters_by_max_points_zero_instead_of_ignoring_the_filter(clie
     assert names == ["Grátis"]
 
 
+def test_products_rejects_inverted_points_range_with_400(client, db_session):
+    _make_product(db_session, name="Qualquer", points_cost="50.00")
+
+    response = client.get("/api/v1/products", params={"min_points": 500, "max_points": 100})
+
+    assert response.status_code == 400
+    assert "min_points" in response.json()["detail"]
+
+
 def test_products_in_stock_excludes_zero_stock_by_default(client, db_session):
     _make_product(db_session, name="Disponível", stock=5)
     _make_product(db_session, name="Esgotado", stock=0)
